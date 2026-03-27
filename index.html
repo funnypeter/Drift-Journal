@@ -321,14 +321,86 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   font-size:9px;color:var(--muted);text-align:center;
   padding:3px 0;letter-spacing:.04em;text-transform:uppercase;
 }
-/* Backdrop for expanded card */
+/* ── EXPANDED CATCH CARD — full screen photo + overlay metadata ── */
 .catch-backdrop{
   display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.6);z-index:499;
+  background:rgba(0,0,0,.75);z-index:499;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
 }
 .catch-backdrop.active{display:block;}
+
+/* The expanded card itself — full viewport */
+.catch-detail-card.expanded{
+  position:fixed;
+  inset:0;
+  z-index:500;
+  width:100%;
+  height:100%;
+  max-height:100%;
+  border-radius:0;
+  background:#000;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+/* Photo fills the whole card when expanded */
+.catch-detail-card.expanded .catch-detail-img{
+  flex:1;
+  height:100%;
+  position:relative;
+}
+.catch-detail-card.expanded .catch-detail-img img{
+  width:100%;height:100%;
+  object-fit:contain; /* show whole photo, not cropped */
+  object-position:center;
+}
+/* Dark gradient overlay at bottom for text */
+.catch-detail-card.expanded .catch-detail-img::after{
+  content:'';
+  position:absolute;
+  bottom:0;left:0;right:0;
+  height:55%;
+  background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.5) 40%,transparent 100%);
+  pointer-events:none;
+}
+/* Metadata overlay — sits on top of the gradient */
+.catch-detail-card.expanded .catch-overlay-meta{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  padding:20px 20px 32px;
+  color:white;
+  z-index:2;
+}
+/* Hide the normal metadata panel when expanded */
+.catch-detail-card.expanded .catch-meta-panel{
+  display:none;
+}
+/* Close button for expanded state */
+.catch-expand-close{
+  display:none;
+  position:absolute;top:env(safe-area-inset-top,12px);right:12px;
+  background:rgba(0,0,0,.55);color:white;
+  border:none;border-radius:50%;width:34px;height:34px;
+  font-size:20px;cursor:pointer;z-index:10;
+  align-items:center;justify-content:center;
+  line-height:1;backdrop-filter:blur(4px);
+}
+.catch-detail-card.expanded .catch-expand-close{display:flex;}
+/* Nav arrows for swiping between cards */
+.catch-nav-prev,.catch-nav-next{
+  display:none;position:absolute;top:50%;
+  transform:translateY(-50%);
+  background:rgba(255,255,255,.15);backdrop-filter:blur(4px);
+  border:none;color:white;border-radius:50%;
+  width:40px;height:40px;font-size:22px;cursor:pointer;z-index:10;
+  align-items:center;justify-content:center;
+}
+.catch-nav-prev{left:10px;}
+.catch-nav-next{right:10px;}
+.catch-detail-card.expanded .catch-nav-prev,
+.catch-detail-card.expanded .catch-nav-next{display:flex;}
 .catch-detail-card{flex:0 0 200px;background:var(--surface);border-radius:var(--radius);overflow:hidden}
-.catch-detail-img{height:130px;background:linear-gradient(135deg,#2a4a3a,#1a2e20);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.catch-detail-img{height:130px;background:linear-gradient(135deg,#2a4a3a,#1a2e20);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;flex-direction:column}
 .catch-detail-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .catch-detail-time{position:absolute;bottom:5px;left:7px;background:rgba(0,0,0,.55);color:white;font-size:9px;padding:2px 5px;border-radius:3px}
 .map-mini{margin:16px 16px 0;border-radius:var(--radius);overflow:hidden;height:130px;position:relative;background:#c8dfe8}
@@ -1277,20 +1349,61 @@ function renderFeed(){
     return `<div class="trip-card" onclick="openEntry(${idx})">${ph}<div class="trip-datesmall">${fmtShort(t.date).toUpperCase()}</div><div class="trip-italic">${t.title}</div><div class="trip-date-big">${t.displayDate}</div><div class="trip-title-big">${t.title}</div><div class="tag-row">${tags}</div>${t.notes?`<div class="trip-quote">"${t.notes.substring(0,130)}${t.notes.length>130?'...':''}"</div>`:''}</div>${i<sorted.length-1?'<div class="divider"></div>':''}`;
   }).join('');
 }
-function expandCatchCard(card){
+function expandCatchCard(card, catchIdx){
   if(card.classList.contains('expanded')) return;
-  // Show backdrop
+  // Backdrop
   let bd=document.getElementById('catchBackdrop');
-  if(!bd){bd=document.createElement('div');bd.id='catchBackdrop';bd.className='catch-backdrop';bd.onclick=function(){closeAllCatchCards();};document.body.appendChild(bd);}
+  if(!bd){
+    bd=document.createElement('div');bd.id='catchBackdrop';bd.className='catch-backdrop';
+    bd.onclick=function(){closeAllCatchCards();};
+    document.body.appendChild(bd);
+  }
   bd.classList.add('active');
   card.classList.add('expanded');
-  // Scroll to top of expanded card
-  card.scrollTop=0;
-  // Lock body scroll
   document.body.style.overflow='hidden';
+
+  // Add prev/next nav if multiple catches
+  const total=parseInt(card.dataset.total||'1');
+  if(total>1){
+    // Remove old nav buttons if any
+    card.querySelectorAll('.catch-nav-prev,.catch-nav-next').forEach(b=>b.remove());
+    if(catchIdx>0){
+      const prev=document.createElement('button');
+      prev.className='catch-nav-prev';prev.innerHTML='&#8249;';prev.title='Previous catch';
+      prev.onclick=function(e){
+        e.stopPropagation();
+        closeAllCatchCards();
+        const prevCard=document.querySelector('.catch-detail-card[data-catch-idx="'+(catchIdx-1)+'"]');
+        if(prevCard) expandCatchCard(prevCard,catchIdx-1);
+      };
+      card.appendChild(prev);
+    }
+    if(catchIdx<total-1){
+      const next=document.createElement('button');
+      next.className='catch-nav-next';next.innerHTML='&#8250;';next.title='Next catch';
+      next.onclick=function(e){
+        e.stopPropagation();
+        closeAllCatchCards();
+        const nextCard=document.querySelector('.catch-detail-card[data-catch-idx="'+(catchIdx+1)+'"]');
+        if(nextCard) expandCatchCard(nextCard,catchIdx+1);
+      };
+      card.appendChild(next);
+    }
+  }
+
+  // Swipe to close
+  let touchStartY=0;
+  card.addEventListener('touchstart',function(e){touchStartY=e.touches[0].clientY;},{passive:true,once:true});
+  card.addEventListener('touchend',function(e){
+    const dy=e.changedTouches[0].clientY-touchStartY;
+    if(dy>60) closeAllCatchCards(); // swipe down to close
+  },{once:true});
 }
 function closeAllCatchCards(){
-  document.querySelectorAll('.catch-detail-card.expanded').forEach(function(c){c.classList.remove('expanded');});
+  document.querySelectorAll('.catch-detail-card.expanded').forEach(function(c){
+    c.classList.remove('expanded');
+    c.querySelectorAll('.catch-nav-prev,.catch-nav-next').forEach(b=>b.remove());
+  });
   var bd=document.getElementById('catchBackdrop');
   if(bd) bd.classList.remove('active');
   document.body.style.overflow='';
@@ -1304,7 +1417,45 @@ function renderMap(){
 // ══ ENTRY DETAIL ══════════════════════════════════════════════
 function openEntry(idx){
   currentEntryIdx=idx;const e=trips[idx];
-  const ch=e.catches_list.map(c=>`<div class="catch-detail-card" onclick="expandCatchCard(this)"><button class="catch-expand-close" onclick="event.stopPropagation();closeAllCatchCards()">×</button><div class="catch-detail-img">${c.photo?`<img src="${c.photo}"/>`:'<svg width="40" height="28" viewBox="0 0 40 28" fill="none" opacity=".3"><path d="M3 14 Q10 7 17 11 Q24 15 31 9 Q36 4 39 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>'}<div class="catch-detail-time">${c.time}</div></div><div style="padding:8px 10px 10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">SPECIES</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.species}</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY</div><div style="font-size:.78rem;font-weight:600">${c.fly}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">LENGTH</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.length} in</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY SIZE</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">#${c.size}</div></div></div>${c.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;padding:4px 0 2px;line-height:1.4">${c.notes}</div>`:''}<div class="catch-expand-hint">tap to expand</div></div></div>`).join('');
+  const ch=e.catches_list.map((c,ci)=>{
+    const photoHtml=c.photo
+      ?`<img src="${c.photo}" style="width:100%;height:100%;object-fit:cover;display:block"/>`
+      :`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2a4a3a,#1a2e20)"><svg width="40" height="28" viewBox="0 0 40 28" fill="none" opacity=".3"><path d="M3 14 Q10 7 17 11 Q24 15 31 9 Q36 4 39 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>`;
+    return `<div class="catch-detail-card" onclick="expandCatchCard(this,${ci})" data-catch-idx="${ci}" data-total="${e.catches_list.length}">
+      <!-- Close button (only visible when expanded) -->
+      <button class="catch-expand-close" onclick="event.stopPropagation();closeAllCatchCards()">×</button>
+      <!-- Photo area — fills card normally, fills screen when expanded -->
+      <div class="catch-detail-img">
+        ${photoHtml}
+        <!-- Overlay metadata — shown on gradient when expanded -->
+        <div class="catch-overlay-meta">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.8;margin-bottom:4px">${c.time||''}</div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:1.6rem;font-weight:700;line-height:1.1;margin-bottom:8px">${c.species}</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            ${c.length&&c.length!=='—'?`<div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;opacity:.7;margin-bottom:2px">Length</div><div style="font-size:1rem;font-weight:600">${c.length}"</div></div>`:''}
+            ${c.fly&&c.fly!=='—'?`<div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;opacity:.7;margin-bottom:2px">Fly</div><div style="font-size:1rem;font-weight:600">${c.fly}</div></div>`:''}
+            ${c.size&&c.size!=='—'?`<div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;opacity:.7;margin-bottom:2px">Size</div><div style="font-size:1rem;font-weight:600">#${c.size}</div></div>`:''}
+          </div>
+          ${c.notes?`<div style="font-size:12px;font-style:italic;opacity:.85;margin-top:8px;line-height:1.5">${c.notes}</div>`:''}
+          <div style="font-size:10px;opacity:.5;margin-top:12px;letter-spacing:.05em">${ci+1} of ${e.catches_list.length} catches</div>
+        </div>
+        <div class="catch-detail-time">${c.time||''}</div>
+      </div>
+      <!-- Normal compact metadata panel (hidden when expanded) -->
+      <div class="catch-meta-panel" style="padding:8px 10px 10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">SPECIES</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.species}</div></div>
+          <div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY</div><div style="font-size:.78rem;font-weight:600">${c.fly||'—'}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">LENGTH</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.length||'—'} in</div></div>
+          <div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY SIZE</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">#${c.size||'—'}</div></div>
+        </div>
+        ${c.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;padding:4px 0 2px;line-height:1.4">${c.notes}</div>`:''}
+        <div class="catch-expand-hint">tap to expand</div>
+      </div>
+    </div>`;
+  }).join('');
   document.getElementById('entryDetailContent').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px 0">
       <button onclick="switchTab('vHome','btn-home')" style="display:flex;align-items:center;gap:4px;background:none;border:none;font-size:13px;color:var(--ink2);cursor:pointer;font-family:var(--sans)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Back</button>
