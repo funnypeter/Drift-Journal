@@ -1,8 +1,8 @@
 {
   "name": "Drift Journal",
   "short_name": "Drift",
-  "description": "Fly fishing trip journal with live USGS data and AI fish identification",
-  "start_url": "/",
+  "description": "Fly fishing trip journal with live USGS conditions and AI fish identification",
+  "start_url": "/Drift-Journal/",
   "display": "standalone",
   "background_color": "#f2ede4",
   "theme_color": "#1e4d43",
@@ -21,6 +21,8 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["sports", "lifestyle"],
-  "screenshots": []
+  "categories": [
+    "sports",
+    "lifestyle"
+  ]
 }

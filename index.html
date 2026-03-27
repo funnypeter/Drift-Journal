@@ -21,7 +21,59 @@
   --serif:'Playfair Display',Georgia,serif;--sans:'Inter',sans-serif;
   --radius:10px;--bottom:60px;
 }
-body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390px;margin:0 auto;min-height:100vh;overflow-x:hidden}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden}
+
+/* ── Responsive: Z Fold 7 unfolded & tablets ── */
+/* ── Fold 7 & Tablet Responsive ── */
+@media (min-width:500px){
+  body{max-width:500px}
+  .bnav{width:500px}
+  #installBanner{width:calc(500px - 32px)}
+}
+@media (min-width:600px){
+  :root{--bottom:68px}
+  body{max-width:600px}
+  .bnav{width:600px}
+  .feed-title{font-size:3rem}
+  .trip-ph{aspect-ratio:16/9}
+  .trip-title-big{font-size:1.9rem}
+  .conditions-card{padding:16px}
+  .cond-grid-3{grid-template-columns:repeat(3,1fr)}
+  .catch-scroll{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;overflow-x:visible;padding:0 16px 16px}
+  .catch-detail-card{flex:unset;width:100%}
+  .log-form{max-width:600px}
+  #installBanner{width:calc(600px - 32px)}
+  .trip-card{padding:0 20px 36px}
+  .log-section{padding:0 16px 12px}
+}
+@media (min-width:840px){
+  body{max-width:880px}
+  .bnav{width:880px}
+  #installBanner{width:calc(880px - 32px)}
+  .feed-container{display:grid;grid-template-columns:1fr 1fr;gap:0;align-items:start}
+  .divider{display:none}
+  .trip-card{padding:0 24px 36px}
+  .feed-title{font-size:3.2rem;padding:28px 24px 8px}
+  .feed-line{margin:8px 24px 20px}
+  .catch-scroll{grid-template-columns:repeat(3,1fr)}
+  .view{padding-bottom:calc(var(--bottom)+24px)}
+  .log-form{max-width:800px;margin:0 auto}
+  .vLocStep-inner{max-width:600px;margin:0 auto}
+}
+@media (min-width:932px){
+  body{max-width:100%;padding:0}
+  .bnav{width:100%;max-width:100%}
+  #installBanner{width:calc(100% - 32px);max-width:900px}
+  .feed-container{display:grid;grid-template-columns:1fr 1fr 1fr;max-width:1100px;margin:0 auto}
+  .feed-title{padding:28px 32px 8px;max-width:1100px;margin:0 auto}
+  .feed-line{margin:8px 32px 20px;max-width:1100px}
+  .topbar{max-width:100%}
+  .log-form{max-width:860px;margin:0 auto}
+  .catch-scroll{grid-template-columns:repeat(4,1fr)}
+  .conditions-card{max-width:860px;margin:0 auto}
+  #vEntry .conditions-card{max-width:100%}
+}
+
 .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:390px;background:var(--bg);border-top:1px solid rgba(0,0,0,0.1);display:flex;height:var(--bottom);z-index:200;padding-bottom:4px}
 .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500;border:none;background:none;padding:0}
 .bnav-item.active{color:var(--ink)}
@@ -231,6 +283,50 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390
 .fn-tab{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:0 0 8px;margin-right:20px;cursor:pointer;color:var(--muted);border:none;background:none;border-bottom:2px solid transparent}
 .fn-tab.active{color:var(--ink);border-bottom:2px solid var(--ink)}
 .fn-text{font-family:var(--serif);font-style:italic;font-size:.95rem;line-height:1.8;color:var(--ink2)}
+.catch-detail-card{
+  cursor:pointer;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.catch-detail-card:hover{
+  transform:translateY(-2px);
+  box-shadow:0 4px 16px rgba(0,0,0,.12);
+}
+.catch-detail-card.expanded{
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  width:100%;
+  max-width:430px;
+  margin:0 auto;
+  z-index:500;
+  border-radius:0;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+}
+.catch-detail-card.expanded .catch-detail-img{
+  height:260px;
+  flex-shrink:0;
+}
+.catch-expand-close{
+  display:none;
+  position:absolute;top:12px;right:12px;
+  background:rgba(0,0,0,.5);color:white;
+  border:none;border-radius:50%;
+  width:32px;height:32px;font-size:18px;
+  cursor:pointer;z-index:10;
+  align-items:center;justify-content:center;
+}
+.catch-detail-card.expanded .catch-expand-close{display:flex;}
+.catch-expand-hint{
+  font-size:9px;color:var(--muted);text-align:center;
+  padding:3px 0;letter-spacing:.04em;text-transform:uppercase;
+}
+/* Backdrop for expanded card */
+.catch-backdrop{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.6);z-index:499;
+}
+.catch-backdrop.active{display:block;}
 .catch-detail-card{flex:0 0 200px;background:var(--surface);border-radius:var(--radius);overflow:hidden}
 .catch-detail-img{height:130px;background:linear-gradient(135deg,#2a4a3a,#1a2e20);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .catch-detail-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -305,7 +401,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390
 <div class="view active" id="vHome">
   <h1 class="feed-title">Recent Journeys</h1>
   <div class="feed-line"></div>
-  <div id="feedContent"></div>
+  <div class="feed-container"><div id="feedContent"></div></div>
 </div>
 
 <!-- LOCATION STEP -->
@@ -344,7 +440,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390
 </div>
 
 <!-- LOG FORM -->
-<div class="view" id="vLog">
+<div class="view" id="vLog"><div class="log-form">
   <div class="log-new-label">NEW ENTRY · STEP 2 OF 2</div>
   <input class="log-title-input" placeholder="Title of your journey..." id="logTitle"/>
   <div class="loc-set-row">
@@ -381,7 +477,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390
   <div class="cond-manual">
     <div class="cond-field"><label>Air Temp (°F)</label><input class="cond-input" id="logAirTemp" placeholder="62"/></div>
     <div class="cond-field"><label>Barometric (inHg)</label><input class="cond-input" id="logBaro" placeholder="30.12"/></div>
-    <div class="cond-field"><label>Weather</label><input class="cond-input" id="logWeather" placeholder="Partly cloudy"/></div>
+    <div class="cond-field"><label>Weather</label><div style="display:flex;gap:4px"><input class="cond-input" id="logWeather" placeholder="Auto-filled"/><button onclick="fetchWeather()" style="background:var(--teal);color:white;border:none;border-radius:6px;padding:0 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">↺</button></div></div>
     <div class="cond-field"><label>Wind</label><input class="cond-input" id="logWind" placeholder="8mph NW"/></div>
   </div>
 
@@ -409,6 +505,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:390
 </div>
 
 <!-- MAP -->
+</div><!-- end log-form -->
 <div class="view" id="vMap">
   <div class="map-title">Trip Map</div>
   <div style="font-size:12px;color:var(--muted);padding:0 16px 16px">All your fishing locations</div>
@@ -572,6 +669,8 @@ function buildFlyOpts(ci){
 
 // ══ FIX 1: USGS — auto-fetch by location + date ════════════════
 function onDateOrLocationChange(){
+  // Re-fetch weather when date or location changes
+  if(selectedLocation.lat) setTimeout(fetchWeather, 200);
   // Auto-fetch if we have a location with a known USGS id
   if(selectedLocation.usgsId){
     setTimeout(fetchUSGS, 300);
@@ -660,6 +759,82 @@ async function fetchUSGS(){
   }
   ri.classList.remove('spin');
 }
+async function fetchWeather(){
+  if(!selectedLocation.lat||!selectedLocation.lng) return;
+  const lat=selectedLocation.lat,lng=selectedLocation.lng;
+  const logDate=document.getElementById('logDate').value;
+  const isHistorical=logDate&&logDate<new Date().toISOString().split('T')[0];
+
+  try{
+    let url,data;
+    if(isHistorical){
+      // Historical weather via Open-Meteo archive
+      url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lng
+        +'&start_date='+logDate+'&end_date='+logDate
+        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,windspeed_10m_max'
+        +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
+    }else{
+      // Current/forecast via Open-Meteo forecast
+      url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng
+        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,windspeed_10m_max'
+        +'&current_weather=true'
+        +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
+    }
+
+    const r=await Promise.race([
+      fetch(url),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+    ]);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    data=await r.json();
+
+    const daily=data.daily;
+    if(!daily) throw new Error('No weather data');
+
+    // WMO weather code → description
+    function wmoDesc(code){
+      if(code<=1) return 'Clear';
+      if(code<=3) return 'Partly Cloudy';
+      if(code<=48) return 'Foggy';
+      if(code<=57) return 'Drizzle';
+      if(code<=67) return 'Rain';
+      if(code<=77) return 'Snow';
+      if(code<=82) return 'Showers';
+      if(code<=99) return 'Thunderstorm';
+      return 'Variable';
+    }
+
+    const tMax=daily.temperature_2m_max?.[0];
+    const tMin=daily.temperature_2m_min?.[0];
+    const wCode=daily.weathercode?.[0];
+    const wind=daily.windspeed_10m_max?.[0];
+    const precip=daily.precipitation_sum?.[0];
+
+    if(tMax!=null&&tMin!=null){
+      const avg=Math.round((tMax+tMin)/2);
+      document.getElementById('logAirTemp').value=avg+'°F';
+    }
+    if(wCode!=null){
+      let desc=wmoDesc(wCode);
+      if(wind>20) desc+=' / Windy '+Math.round(wind)+' mph';
+      if(precip>0.1) desc+=' / '+precip.toFixed(2)+'" precip';
+      document.getElementById('logWeather').value=desc;
+    }
+
+    // Current conditions for display
+    if(data.current_weather){
+      const curr=data.current_weather;
+      document.getElementById('logAirTemp').value=Math.round(curr.temperature)+'°F';
+    }
+
+    showToast('Weather loaded from Open-Meteo');
+  }catch(e){
+    // Silently fail — weather is a nice-to-have
+    console.log('Weather fetch failed:',e.message);
+  }
+}
+
+
 async function findNearestGauge(lat,lng){
   try{
     // Search a ~0.5° bounding box for active streamflow gauges
@@ -688,30 +863,27 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
   const card=document.querySelector('.catch-log-card[data-catch-idx="'+catchIdx+'"]');
   if(!card)return;
 
-  // Show analyzing strip
   let aiStrip=card.querySelector('.ai-strip');
   if(!aiStrip){
     aiStrip=document.createElement('div');
     aiStrip.className='ai-strip';
     const photoArea=card.querySelector('.catch-photo-area');
-    if(photoArea&&photoArea.nextSibling){card.insertBefore(aiStrip,photoArea.nextSibling)}
-    else{card.insertBefore(aiStrip,card.firstChild.nextSibling||card.firstChild)}
+    if(photoArea&&photoArea.nextSibling){card.insertBefore(aiStrip,photoArea.nextSibling);}
+    else{card.appendChild(aiStrip);}
   }
-  const aiStart=Date.now();
-  aiStrip.innerHTML='<div class="ai-analyzing-strip"><div class="dot"></div><div class="dot"></div><div class="dot"></div>&nbsp;Identifying fish... (may take ~5s)</div>';
-  // Update message after 8s to show still working
-  const aiProgressTimer=setTimeout(()=>{
-    if(aiStrip&&aiStrip.querySelector('.ai-analyzing-strip')){
-      aiStrip.innerHTML='<div class="ai-analyzing-strip"><div class="dot"></div><div class="dot"></div><div class="dot"></div>&nbsp;Still analyzing... almost done</div>';
-    }
-  },8000);
+
+  let _aiTick=0;
+  aiStrip.innerHTML='<div class="ai-analyzing-strip"><div class="dot"></div><div class="dot"></div><div class="dot"></div>&nbsp;<span id="aiStatusMsg_'+catchIdx+'">Identifying fish...</span></div>';
+  const _aiTickTimer=setInterval(function(){
+    _aiTick++;
+    const msgEl=aiStrip.querySelector('#aiStatusMsg_'+catchIdx);
+    if(msgEl) msgEl.textContent=_aiTick<4?'Identifying fish...':_aiTick<8?'Analyzing photo...':'Almost done...';
+  },3000);
 
   try{
-    // Convert data URL to base64
     const base64=imageDataUrl.split(',')[1];
     const mediaType=imageDataUrl.split(';')[0].split(':')[1]||'image/jpeg';
 
-    // 30s timeout via Promise.race — no AbortSignal needed
     const fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
@@ -719,42 +891,50 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
         'anthropic-dangerous-direct-browser-access':'true'
       },
       body:JSON.stringify({
-        model:'claude-sonnet-4-5-20251001',
+        model:'claude-haiku-4-5-20251001',
         max_tokens:200,
         messages:[{
           role:'user',
           content:[
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-            {type:'text',text:'Identify this fish. Respond ONLY with JSON: {"species":"Rainbow Trout","length":"16.5","confidence":92}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess. Estimate length in inches.'}
+            {type:'text',text:'Identify this fish. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"16.5","confidence":92}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess. Estimate length in inches.'}
           ]
         }]
       })
     });
-    const timeoutPromise=new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),30000));
+
+    const timeoutPromise=new Promise(function(_,reject){
+      setTimeout(function(){reject(new Error('timeout'));},30000);
+    });
+
     const response=await Promise.race([fetchPromise,timeoutPromise]);
+    clearInterval(_aiTickTimer);
+
     if(!response.ok){
-      const errBody=await response.text().catch(()=>'');
-      throw new Error('API '+response.status+(errBody?' — '+errBody.substring(0,80):''));
+      const errText=await response.text().catch(function(){return '';});
+      let errMsg='API '+response.status;
+      try{const e=JSON.parse(errText);errMsg=e.error?.message||errMsg;}catch(e){}
+      // If 401 auth error from non-claude.ai, show helpful message
+      if(response.status===401) errMsg='Sign in to claude.ai first, then the AI features will work automatically';
+      throw new Error(errMsg);
     }
+
     const data=await response.json();
     const text=data.content?.[0]?.text||'';
     const clean=text.replace(/```json|```/g,'').trim();
     const result=JSON.parse(clean);
 
-    // Update the form fields directly — no separate accept button
+    // Update catch data
     newCatches[catchIdx].species=result.species||newCatches[catchIdx].species;
     newCatches[catchIdx].length=result.length||newCatches[catchIdx].length;
-    newCatches[catchIdx].aiResult={species:result.species,length:result.length,confidence:result.confidence};
 
     // Update species select
     const speciesSelect=card.querySelector('select');
     if(speciesSelect){
-      // Try to select existing option
       let found=false;
       for(let opt of speciesSelect.options){
-        if(opt.value===result.species||opt.text===result.species){opt.selected=true;found=true;break}
+        if(opt.value===result.species){opt.selected=true;found=true;break;}
       }
-      // Add as new option if not in list
       if(!found&&result.species){
         const opt=document.createElement('option');
         opt.value=result.species;opt.textContent=result.species;
@@ -762,34 +942,28 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       }
     }
 
-    // Update length input — placeholder is "—"
-    const lengthInput=card.querySelector('.catch-field input[placeholder="—"]');
-    if(lengthInput){lengthInput.value=result.length;}
+    // Update length input
+    const lengthInput=card.querySelector('.catch-field input[placeholder="18.5"]')||card.querySelector('.catch-field input[placeholder="—"]');
+    if(lengthInput) lengthInput.value=result.length||'';
 
-    clearInterval(_aiTickTimer);
-    aiStrip.innerHTML=`<div class="ai-result-strip">
-      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-      <div class="ai-result-strip-text">
-        <strong>${result.species}</strong> · est. <strong>${result.length}"</strong> · ${result.confidence}% confidence — fields updated
-      </div>
-    </div>`;
+    aiStrip.innerHTML='<div class="ai-result-strip">'+
+      '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'+
+      '<div class="ai-result-strip-text"><strong>'+result.species+'</strong> · est. <strong>'+(result.length||'?')+'"</strong> · '+result.confidence+'% confidence</div>'+
+      '</div>';
     showToast('Claude identified: '+result.species);
 
   }catch(err){
-    // Graceful failure — show the strip but don't crash
     clearInterval(_aiTickTimer);
-    const msg=err.name==='AbortError'
-      ? 'AI timed out (30s) — fill in species & size manually'
-      : err.message==='API unavailable'
-      ? 'AI identification needs an API key — fill in manually'
-      : 'Could not identify ('+err.message.substring(0,50)+') — fill in manually';
-    aiStrip.innerHTML=`<div class="ai-result-strip" style="background:rgba(0,0,0,.03)">
-      <svg viewBox="0 0 24 24" style="stroke:var(--muted)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg>
-      <div class="ai-result-strip-text" style="color:var(--muted)">${msg}</div>
-    </div>`;
+    const isTimeout=err.name==='AbortError'||err.message==='timeout';
+    const msg=isTimeout
+      ?'AI timed out — fill in manually'
+      :'Identification failed: '+err.message.substring(0,60);
+    aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)">'+
+      '<svg viewBox="0 0 24 24" style="stroke:var(--muted)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'+
+      '<div class="ai-result-strip-text" style="color:var(--muted)">'+msg+'</div>'+
+      '</div>';
   }
 }
-
 // ══ CATCH CARD ════════════════════════════════════════════════
 function buildCatchCard(c,i){
   // FIX 2: Photo area shown first, species/length blank until photo added
@@ -1017,6 +1191,8 @@ function continueToLog(){
   if(!selectedLocation.name)return;
   document.getElementById('locSetName').textContent=selectedLocation.name;
   showView('vLog');
+  // Auto-fetch weather for the selected location+date
+  setTimeout(fetchWeather, 500);
   document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));
   document.getElementById('btn-log').classList.add('active');
   // Auto-fetch USGS when entering log screen
@@ -1101,6 +1277,24 @@ function renderFeed(){
     return `<div class="trip-card" onclick="openEntry(${idx})">${ph}<div class="trip-datesmall">${fmtShort(t.date).toUpperCase()}</div><div class="trip-italic">${t.title}</div><div class="trip-date-big">${t.displayDate}</div><div class="trip-title-big">${t.title}</div><div class="tag-row">${tags}</div>${t.notes?`<div class="trip-quote">"${t.notes.substring(0,130)}${t.notes.length>130?'...':''}"</div>`:''}</div>${i<sorted.length-1?'<div class="divider"></div>':''}`;
   }).join('');
 }
+function expandCatchCard(card){
+  if(card.classList.contains('expanded')) return;
+  // Show backdrop
+  let bd=document.getElementById('catchBackdrop');
+  if(!bd){bd=document.createElement('div');bd.id='catchBackdrop';bd.className='catch-backdrop';bd.onclick=function(){closeAllCatchCards();};document.body.appendChild(bd);}
+  bd.classList.add('active');
+  card.classList.add('expanded');
+  // Scroll to top of expanded card
+  card.scrollTop=0;
+  // Lock body scroll
+  document.body.style.overflow='hidden';
+}
+function closeAllCatchCards(){
+  document.querySelectorAll('.catch-detail-card.expanded').forEach(function(c){c.classList.remove('expanded');});
+  var bd=document.getElementById('catchBackdrop');
+  if(bd) bd.classList.remove('active');
+  document.body.style.overflow='';
+}
 function renderMap(){
   const sorted=sortedTrips();const pp=[{cx:80,cy:105},{cx:210,cy:75},{cx:155,cy:180},{cx:120,cy:50},{cx:250,cy:130}];
   document.getElementById('mapPinsGroup').innerHTML=sorted.map((t,i)=>{const p=pp[i%pp.length];const idx=trips.indexOf(t);return `<g style="cursor:pointer" onclick="openEntry(${idx})"><circle cx="${p.cx}" cy="${p.cy}" r="12" fill="#1e4d43" opacity=".2"/><circle cx="${p.cx}" cy="${p.cy}" r="8" fill="#1e4d43"/><circle cx="${p.cx}" cy="${p.cy}" r="4" fill="white"/><text x="${p.cx+13}" y="${p.cy+4}" font-size="9" fill="#1e4d43" font-weight="600" font-family="Inter,sans-serif">${t.location.split(',')[0]}</text></g>`}).join('');
@@ -1110,7 +1304,7 @@ function renderMap(){
 // ══ ENTRY DETAIL ══════════════════════════════════════════════
 function openEntry(idx){
   currentEntryIdx=idx;const e=trips[idx];
-  const ch=e.catches_list.map(c=>`<div class="catch-detail-card"><div class="catch-detail-img">${c.photo?`<img src="${c.photo}"/>`:'<svg width="40" height="28" viewBox="0 0 40 28" fill="none" opacity=".3"><path d="M3 14 Q10 7 17 11 Q24 15 31 9 Q36 4 39 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>'}<div class="catch-detail-time">${c.time}</div></div><div style="padding:8px 10px 10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">SPECIES</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.species}</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY</div><div style="font-size:.78rem;font-weight:600">${c.fly}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">LENGTH</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.length} in</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY SIZE</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">#${c.size}</div></div></div>${c.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;padding:4px 0 2px;line-height:1.4">${c.notes}</div>`:''}</div></div>`).join('');
+  const ch=e.catches_list.map(c=>`<div class="catch-detail-card" onclick="expandCatchCard(this)"><button class="catch-expand-close" onclick="event.stopPropagation();closeAllCatchCards()">×</button><div class="catch-detail-img">${c.photo?`<img src="${c.photo}"/>`:'<svg width="40" height="28" viewBox="0 0 40 28" fill="none" opacity=".3"><path d="M3 14 Q10 7 17 11 Q24 15 31 9 Q36 4 39 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>'}<div class="catch-detail-time">${c.time}</div></div><div style="padding:8px 10px 10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">SPECIES</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.species}</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY</div><div style="font-size:.78rem;font-weight:600">${c.fly}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">LENGTH</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">${c.length} in</div></div><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY SIZE</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">#${c.size}</div></div></div>${c.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;padding:4px 0 2px;line-height:1.4">${c.notes}</div>`:''}<div class="catch-expand-hint">tap to expand</div></div></div>`).join('');
   document.getElementById('entryDetailContent').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px 0">
       <button onclick="switchTab('vHome','btn-home')" style="display:flex;align-items:center;gap:4px;background:none;border:none;font-size:13px;color:var(--ink2);cursor:pointer;font-family:var(--sans)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Back</button>
@@ -1136,7 +1330,7 @@ function openEntry(idx){
         <span style="font-family:var(--serif);font-size:1.5rem;font-weight:700">Catch Gallery</span>
         <span style="font-size:11px;color:var(--muted)">(${e.catches_list.length} total)</span>
       </div>
-      <div class="catch-scroll">${ch}</div>`:'' }
+      <div class="catch-scroll" id="catchScroll_${idx}">${ch}</div>`:'' }
     ${e.notes?`
       <div class="field-notes">
         <div style="display:flex;border-bottom:1px solid rgba(0,0,0,.1);margin-bottom:14px">
