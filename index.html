@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Drift Journal">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'/>
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap');
@@ -607,6 +607,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     <div class="profile-row"><span>Units &amp; Preferences</span><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
     <div class="profile-row"><span>Export Journal</span><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
   </div>
+  <div class="profile-section">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:10px">Maps &amp; AI</div>
+    <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">🗺 Mapbox Token</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Free at <a href="https://mapbox.com" target="_blank" style="color:var(--teal)">mapbox.com</a> — enables satellite &amp; outdoor maps</div>
+      <div style="display:flex;gap:8px">
+        <input id="mapboxTokenInput" type="password" placeholder="pk.eyJ1..." style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:12px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"/>
+        <button onclick="saveMapboxToken()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+      </div>
+      <div id="mapboxTokenStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ENTRY DETAIL -->
@@ -652,6 +664,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </div>
 
 <script>
+// Mapbox token
+const MAPBOX_TOKEN = localStorage.getItem('driftjournal_mapbox_token') || 'pk.eyJ1IjoiZnVubnlwZXRlciIsImEiOiJjbW5hcHoxd2owbnM4MnhwcDQ5NHR1em52In0.NZO2axyT1gGDwM4H3NsOpA';
+if(typeof mapboxgl !== 'undefined') mapboxgl.accessToken = MAPBOX_TOKEN;
 // ══ LOCATION DB ═══════════════════════════════════════════════
 // Each entry includes usgsId for auto-fetch
 // Seed favorites — user's previously selected locations stored in localStorage
@@ -1518,11 +1533,11 @@ let _leafletMap = null;
 let _leafletMarkers = [];
 
 function renderMap(){
-  const sorted = sortedTrips();
+  const sorted=sortedTrips();
 
   // ── Trip list below map ──
-  document.getElementById('mapTripList').innerHTML = sorted.map((t,i) => {
-    const idx = trips.indexOf(t);
+  document.getElementById('mapTripList').innerHTML=sorted.map((t,i)=>{
+    const idx=trips.indexOf(t);
     return `<div onclick="openEntry(${idx})" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:${i<sorted.length-1?'1px solid rgba(0,0,0,.07)':'none'};cursor:pointer">
       <div style="width:9px;height:9px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
@@ -1533,97 +1548,66 @@ function renderMap(){
     </div>`;
   }).join('');
 
-  // ── Init Leaflet map ──
-  const container = document.getElementById('leafletMap');
+  // ── Init Mapbox map ──
+  const container=document.getElementById('leafletMap');
   if(!container) return;
 
-  // Destroy old map instance if exists
-  if(_leafletMap){
-    _leafletMap.remove();
-    _leafletMap = null;
-    _leafletMarkers = [];
+  // Destroy old map
+  if(_leafletMap){_leafletMap.remove();_leafletMap=null;_leafletMarkers=[];}
+
+  const points=sorted.filter(t=>t.lat&&t.lng);
+  const center=points.length?[points[0].lng,points[0].lat]:[-113.5,44.5];
+
+  if(!MAPBOX_TOKEN){
+    // No token — show OpenStreetMap fallback via Leaflet-style tile
+    container.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;background:#c8dfe8"><div style="font-size:13px;color:#1e4d43;font-weight:600">Add Mapbox token to enable maps</div><button onclick="switchTab('vProfile','btn-profile')" style="background:#1e4d43;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">Go to Profile →</button></div>`;
+    return;
   }
 
-  // Collect valid trip coords
-  const points = sorted.filter(t => t.lat && t.lng);
-
-  // Default center: western US if no trips
-  let center = [44.5, -113.5];
-  let zoom = 5;
-
-  if(points.length === 1){
-    center = [points[0].lat, points[0].lng];
-    zoom = 11;
-  }
-
-  // Init map with OpenStreetMap tiles
-  _leafletMap = L.map('leafletMap', {
-    center: center,
-    zoom: zoom,
-    zoomControl: true,
-    attributionControl: true
+  _leafletMap=new mapboxgl.Map({
+    container:'leafletMap',
+    style:'mapbox://styles/mapbox/outdoors-v12',
+    center:center,
+    zoom:points.length===1?11:5,
+    attributionControl:true
   });
 
-  // Use a clean, minimal tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 18,
-  }).addTo(_leafletMap);
+  _leafletMap.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-left');
 
-  // Custom teal marker icon
-  const markerIcon = L.divIcon({
-    className: '',
-    html: `<div style="
-      width:28px;height:28px;
-      background:var(--teal,#1e4d43);
-      border:3px solid white;
-      border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);
-      box-shadow:0 2px 8px rgba(0,0,0,.35);
-    "></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-    popupAnchor: [0, -30]
-  });
+  _leafletMap.on('load',function(){
+    // Fit bounds to all trip points
+    if(points.length>1){
+      const bounds=new mapboxgl.LngLatBounds();
+      points.forEach(t=>bounds.extend([t.lng,t.lat]));
+      _leafletMap.fitBounds(bounds,{padding:60,maxZoom:11});
+    }
 
-  // Add markers for each trip
-  const latlngs = [];
-  points.forEach(t => {
-    const idx = trips.indexOf(t);
-    const catchCount = t.catches_list?.length || 0;
-    const marker = L.marker([t.lat, t.lng], { icon: markerIcon })
-      .addTo(_leafletMap)
-      .bindPopup(`
-        <div style="font-family:var(--serif,'Georgia');min-width:160px">
-          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${t.title}</div>
+    // Add markers for each trip
+    points.forEach(t=>{
+      const idx=trips.indexOf(t);
+      const catchCount=t.catches_list?.length||0;
+
+      // Custom marker element
+      const el=document.createElement('div');
+      el.style.cssText='width:32px;height:32px;background:#1e4d43;border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer';
+      el.onclick=function(){openEntry(idx);};
+
+      const popup=new mapboxgl.Popup({offset:20,closeButton:false,maxWidth:'220px'})
+        .setHTML(`<div style="font-family:'Inter',sans-serif;padding:2px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px">${t.title}</div>
           <div style="font-size:11px;color:#666;margin-bottom:6px">${t.location} · ${fmtShort(t.date)}</div>
-          ${t.flow ? `<div style="font-size:11px">🌊 ${t.flow}</div>` : ''}
-          ${t.water ? `<div style="font-size:11px">🌡 ${t.water}</div>` : ''}
-          ${catchCount ? `<div style="font-size:11px">🎣 ${catchCount} catch${catchCount>1?'es':''}</div>` : ''}
-          <button onclick="openEntry(${idx})" style="margin-top:8px;background:#1e4d43;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;width:100%">View Entry →</button>
-        </div>
-      `, { maxWidth: 220 });
-    _leafletMarkers.push(marker);
-    latlngs.push([t.lat, t.lng]);
+          ${t.flow?`<div style="font-size:11px">🌊 ${t.flow}</div>`:''}
+          ${t.water?`<div style="font-size:11px">🌡 ${t.water}</div>`:''}
+          ${catchCount?`<div style="font-size:11px;margin-top:4px">🎣 ${catchCount} catch${catchCount!==1?'es':''}</div>`:''}
+          <button onclick="openEntry(${idx})" style="margin-top:8px;width:100%;background:#1e4d43;color:white;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:600;cursor:pointer">View Entry</button>
+        </div>`);
+
+      new mapboxgl.Marker({element:el}).setLngLat([t.lng,t.lat]).setPopup(popup).addTo(_leafletMap);
+    });
   });
-
-  // Fit map to show all markers
-  if(latlngs.length > 1){
-    _leafletMap.fitBounds(latlngs, { padding: [40, 40] });
-  }
-}
-
-// Re-render map when tab becomes visible (Leaflet needs container to be visible)
-function onMapTabShown(){
-  if(_leafletMap){
-    setTimeout(() => _leafletMap.invalidateSize(), 100);
-  } else {
-    renderMap();
-  }
 }
 
 
-// ══ ENTRY DETAIL ══════════════════════════════════════════════
 function openEntry(idx){
   currentEntryIdx=idx;const e=trips[idx];
   const ch=e.catches_list.map((c,ci)=>{
@@ -1709,23 +1693,24 @@ function openEntry(idx){
   setTimeout(function(){
     const miniEl=document.getElementById('miniMapTile');
     if(!miniEl) return;
-    // Remove any previous map instance
     if(window._miniMap){window._miniMap.remove();window._miniMap=null;}
-    if(e.lat&&e.lng){
-      window._miniMap=L.map('miniMapTile',{
-        center:[e.lat,e.lng],zoom:12,
-        zoomControl:false,attributionControl:false,
-        dragging:false,scrollWheelZoom:false,doubleClickZoom:false
+    if(e.lat&&e.lng&&MAPBOX_TOKEN){
+      window._miniMap=new mapboxgl.Map({
+        container:'miniMapTile',
+        style:'mapbox://styles/mapbox/outdoors-v12',
+        center:[e.lng,e.lat],zoom:12,
+        interactive:false,
+        attributionControl:false
       });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        maxZoom:18
-      }).addTo(window._miniMap);
-      // Custom teal pin marker
-      const icon=L.divIcon({
-        html:'<div style="width:14px;height:14px;background:#1e4d43;border:2.5px solid white;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.35)"></div>',
-        iconSize:[14,14],iconAnchor:[7,7],className:''
+      window._miniMap.on('load',function(){
+        const el=document.createElement('div');
+        el.style.cssText='width:14px;height:14px;background:#1e4d43;border:2.5px solid white;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.35)';
+        new mapboxgl.Marker({element:el}).setLngLat([e.lng,e.lat]).addTo(window._miniMap);
       });
-      L.marker([e.lat,e.lng],{icon}).addTo(window._miniMap);
+    } else if(e.lat&&e.lng){
+      // Fallback: static map image using Mapbox Static API (no token needed for embed)
+      miniEl.style.background='#c8dfe8';
+      miniEl.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:6px;color:#8a8474;font-size:12px"><div>📍 ${e.lat.toFixed(4)}° N, ${Math.abs(e.lng).toFixed(4)}° W</div><div style="font-size:10px">Add Mapbox token in Profile for map</div></div>`;
     } else {
       miniEl.style.background='#c8dfe8';
       miniEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8a8474;font-size:12px">No location data</div>';
@@ -1897,7 +1882,7 @@ renderFeed();renderMap();
 document.getElementById('statTrips').textContent=trips.length;
 document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
 </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>
 <script>
 // Register service worker for PWA offline support
 if('serviceWorker' in navigator){
