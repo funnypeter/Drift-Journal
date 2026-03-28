@@ -405,6 +405,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 .catch-detail-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .catch-detail-time{position:absolute;bottom:5px;left:7px;background:rgba(0,0,0,.55);color:white;font-size:9px;padding:2px 5px;border-radius:3px}
 .map-mini{margin:16px 16px 0;border-radius:var(--radius);overflow:hidden;height:180px;position:relative;background:#c8dfe8}
+#mapModal{touch-action:none}
 .map-mini-btn{position:absolute;bottom:10px;right:10px;background:var(--teal);color:white;font-size:11px;font-weight:600;padding:7px 14px;border-radius:6px;border:none;cursor:pointer}
 .map-coords{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.85);font-size:9px;padding:4px 8px;border-radius:4px;color:var(--ink2);line-height:1.4}
 
@@ -584,9 +585,29 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 <div class="view" id="vMap">
   <div class="map-title">Trip Map</div>
   <div style="font-size:12px;color:var(--muted);padding:0 16px 12px">All your fishing locations</div>
-  <div id="leafletMap" style="margin:0 16px;border-radius:var(--radius);overflow:hidden;height:320px;position:relative;z-index:1"></div>
+  <!-- Tappable map preview — opens full modal -->
+  <div id="mapPreview" onclick="openMapModal()" style="margin:0 16px;border-radius:var(--radius);overflow:hidden;height:280px;position:relative;z-index:1;cursor:pointer">
+    <div id="leafletMap" style="width:100%;height:100%;pointer-events:none"></div>
+    <div style="position:absolute;inset:0;z-index:10;display:flex;align-items:flex-end;justify-content:flex-end;pointer-events:none">
+      <div style="background:var(--teal);color:white;font-size:11px;font-weight:700;padding:8px 14px;border-radius:6px;margin:10px;letter-spacing:.04em;display:flex;align-items:center;gap:5px;pointer-events:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        EXPAND MAP
+      </div>
+    </div>
+  </div>
   <div style="padding:16px 16px 8px;font-family:var(--serif);font-size:1.3rem;font-weight:700">All Trips</div>
   <div id="mapTripList"></div>
+</div>
+
+<!-- FULL SCREEN MAP MODAL -->
+<div id="mapModal" style="display:none;position:fixed;inset:0;z-index:600;background:#000;flex-direction:column">
+  <!-- Modal header -->
+  <div style="position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent)">
+    <div style="color:white;font-family:var(--serif);font-size:1.1rem;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.5)">Trip Map</div>
+    <button onclick="closeMapModal()" style="background:rgba(0,0,0,.5);backdrop-filter:blur(6px);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+  </div>
+  <!-- Full screen map -->
+  <div id="mapModalMap" style="width:100%;height:100%"></div>
 </div>
 
 <!-- PROFILE -->
@@ -1543,6 +1564,57 @@ function closeAllCatchCards(){
 let _leafletMap = null;
 let _leafletMarkers = [];
 
+function openMapModal(){
+  const modal=document.getElementById('mapModal');
+  modal.style.display='flex';
+  document.body.style.overflow='hidden';
+  // Init full interactive Mapbox map in modal
+  setTimeout(function(){
+    if(window._modalMap){window._modalMap.remove();window._modalMap=null;}
+    const sorted=sortedTrips();
+    const points=sorted.filter(t=>t.lat&&t.lng);
+    const center=points.length?[points[0].lng,points[0].lat]:[-113.5,44.5];
+    try{
+      window._modalMap=new mapboxgl.Map({
+        container:'mapModalMap',
+        style:'mapbox://styles/mapbox/outdoors-v12',
+        center:center,
+        zoom:points.length===1?11:5,
+        attributionControl:true
+      });
+      window._modalMap.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-right');
+      window._modalMap.on('load',function(){
+        if(points.length>1){
+          const bounds=new mapboxgl.LngLatBounds();
+          points.forEach(t=>bounds.extend([t.lng,t.lat]));
+          window._modalMap.fitBounds(bounds,{padding:80,maxZoom:11});
+        }
+        points.forEach(function(t){
+          const idx=trips.indexOf(t);
+          const el=document.createElement('div');
+          el.style.cssText='width:32px;height:32px;background:#1e4d43;border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer';
+          const catchCount=t.catches_list?.length||0;
+          const popup=new mapboxgl.Popup({offset:20,closeButton:false,maxWidth:'220px'})
+            .setHTML(`<div style="font-family:'Inter',sans-serif;padding:2px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:2px">${t.title}</div>
+              <div style="font-size:11px;color:#666;margin-bottom:6px">${t.location} · ${fmtShort(t.date)}</div>
+              ${t.flow?`<div style="font-size:11px">🌊 ${t.flow}</div>`:''}
+              ${t.water?`<div style="font-size:11px">🌡 ${t.water}</div>`:''}
+              ${catchCount?`<div style="font-size:11px;margin-top:4px">🎣 ${catchCount} catch${catchCount!==1?'es':''}</div>`:''}
+              <button onclick="closeMapModal();openEntry(${idx})" style="margin-top:8px;width:100%;background:#1e4d43;color:white;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:600;cursor:pointer">View Entry →</button>
+            </div>`);
+          new mapboxgl.Marker({element:el}).setLngLat([t.lng,t.lat]).setPopup(popup).addTo(window._modalMap);
+        });
+      });
+    }catch(e){console.log('modal map error:',e.message);}
+  },50);
+}
+function closeMapModal(){
+  document.getElementById('mapModal').style.display='none';
+  document.body.style.overflow='';
+  if(window._modalMap){window._modalMap.remove();window._modalMap=null;}
+}
+
 function renderMap(){
   const sorted=sortedTrips();
 
@@ -1933,6 +2005,22 @@ function installApp(){
     });
   }
 }
+
+// Swipe down to close map modal
+(function(){
+  let _swipeStartY=0;
+  document.addEventListener('touchstart',function(e){
+    if(document.getElementById('mapModal')?.style.display==='flex'){
+      _swipeStartY=e.touches[0].clientY;
+    }
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(document.getElementById('mapModal')?.style.display==='flex'){
+      const dy=e.changedTouches[0].clientY-_swipeStartY;
+      if(dy>80) closeMapModal();
+    }
+  },{passive:true});
+})();
 </script>
 </body>
 </html>
