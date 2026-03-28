@@ -818,22 +818,23 @@ async function fetchUSGS(){
 }
 async function fetchWeather(){
   if(!selectedLocation.lat||!selectedLocation.lng) return;
-  const lat=selectedLocation.lat,lng=selectedLocation.lng;
+  const lat=selectedLocation.lat, lng=selectedLocation.lng;
   const logDate=document.getElementById('logDate').value;
   const isHistorical=logDate&&logDate<new Date().toISOString().split('T')[0];
 
   try{
-    let url,data;
+    let url;
     if(isHistorical){
-      // Historical weather via Open-Meteo archive
       url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lng
         +'&start_date='+logDate+'&end_date='+logDate
-        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,windspeed_10m_max'
+        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode'
+        +',windspeed_10m_max,winddirection_10m_dominant,surface_pressure_mean'
         +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
     }else{
-      // Current/forecast via Open-Meteo forecast
       url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng
-        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,windspeed_10m_max'
+        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode'
+        +',windspeed_10m_max,winddirection_10m_dominant'
+        +'&hourly=surface_pressure'
         +'&current_weather=true'
         +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
     }
@@ -843,13 +844,14 @@ async function fetchWeather(){
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
     ]);
     if(!r.ok) throw new Error('HTTP '+r.status);
-    data=await r.json();
+    const data=await r.json();
 
     const daily=data.daily;
     if(!daily) throw new Error('No weather data');
 
-    // WMO weather code → description
+    // WMO code → description
     function wmoDesc(code){
+      if(code<=0) return 'Clear';
       if(code<=1) return 'Clear';
       if(code<=3) return 'Partly Cloudy';
       if(code<=48) return 'Foggy';
@@ -861,32 +863,69 @@ async function fetchWeather(){
       return 'Variable';
     }
 
+    // Wind direction degrees → compass
+    function windDir(deg){
+      const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      return dirs[Math.round(deg/22.5)%16];
+    }
+
     const tMax=daily.temperature_2m_max?.[0];
     const tMin=daily.temperature_2m_min?.[0];
     const wCode=daily.weathercode?.[0];
     const wind=daily.windspeed_10m_max?.[0];
+    const windDeg=daily.winddirection_10m_dominant?.[0];
     const precip=daily.precipitation_sum?.[0];
 
-    if(tMax!=null&&tMin!=null){
-      const avg=Math.round((tMax+tMin)/2);
-      document.getElementById('logAirTemp').value=avg+'°F';
+    // ── Air temp ─────────────────────────────────────────────
+    // Prefer current_weather for today; fall back to daily avg
+    if(data.current_weather){
+      document.getElementById('logAirTemp').value=Math.round(data.current_weather.temperature)+'°F';
+    } else if(tMax!=null&&tMin!=null){
+      document.getElementById('logAirTemp').value=Math.round((tMax+tMin)/2)+'°F';
     }
+
+    // ── Weather description ──────────────────────────────────
     if(wCode!=null){
       let desc=wmoDesc(wCode);
-      if(wind>20) desc+=' / Windy '+Math.round(wind)+' mph';
       if(precip>0.1) desc+=' / '+precip.toFixed(2)+'" precip';
       document.getElementById('logWeather').value=desc;
     }
 
-    // Current conditions for display
-    if(data.current_weather){
+    // ── Wind ─────────────────────────────────────────────────
+    if(wind!=null){
+      const dir=windDeg!=null?' '+windDir(windDeg):'';
+      document.getElementById('logWind').value=Math.round(wind)+' mph'+dir;
+    } else if(data.current_weather&&data.current_weather.windspeed!=null){
       const curr=data.current_weather;
-      document.getElementById('logAirTemp').value=Math.round(curr.temperature)+'°F';
+      const dir=curr.winddirection!=null?' '+windDir(curr.winddirection):'';
+      document.getElementById('logWind').value=Math.round(curr.windspeed)+' mph'+dir;
     }
 
-    showToast('Weather loaded from Open-Meteo');
+    // ── Barometric pressure ──────────────────────────────────
+    // Archive API returns surface_pressure_mean in daily
+    // Forecast API returns surface_pressure in hourly — find closest hour to now
+    let pressureHpa=null;
+    if(isHistorical&&daily.surface_pressure_mean?.[0]!=null){
+      pressureHpa=daily.surface_pressure_mean[0];
+    } else if(!isHistorical&&data.hourly?.surface_pressure){
+      // Find the current hour index
+      const now=new Date();
+      const hourStr=now.toISOString().substring(0,13); // "2026-03-27T17"
+      const times=data.hourly.time||[];
+      let bestIdx=0;
+      for(let i=0;i<times.length;i++){
+        if(times[i].startsWith(hourStr)){bestIdx=i;break;}
+      }
+      pressureHpa=data.hourly.surface_pressure[bestIdx];
+    }
+    if(pressureHpa!=null){
+      // Convert hPa to inHg (standard for US fishing/weather)
+      const inHg=(pressureHpa*0.02953).toFixed(2);
+      document.getElementById('logBaro').value=inHg+' inHg';
+    }
+
+    showToast('Weather loaded');
   }catch(e){
-    // Silently fail — weather is a nice-to-have
     console.log('Weather fetch failed:',e.message);
   }
 }
