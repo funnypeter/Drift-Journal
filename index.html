@@ -501,11 +501,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     </div>
   </div>
   <div class="or-divider"><span>search or type any location</span></div>
-  <div style="text-align:center;margin:2px 0">
-    <button onclick="openBulkImport()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;gap:4px;padding:4px 8px;opacity:.75">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Import old trips from photos
-    </button>
+  <div onclick="openBulkImport()" style="margin:12px 16px 0;background:linear-gradient(135deg,#1e4d43 0%,#2a6b5e 100%);border-radius:var(--radius);padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(30,77,67,.2)">
+    <div style="width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="color:white;font-weight:700;font-size:14px;margin-bottom:2px">Import Past Trips</div>
+      <div style="color:rgba(255,255,255,.7);font-size:11px;line-height:1.4">Auto-create entries from fish photos using GPS & date</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
   </div>
   <div class="search-card">
     <div class="search-input-row">
@@ -633,7 +637,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
         Choose Photos
         <input id="bulkPhotoInput" type="file" accept="image/*" multiple style="display:none" onchange="handleBulkPhotos(this.files)">
       </label>
-      <div style="font-size:11px;color:var(--muted);margin-top:12px">Works best with photos taken with location services on</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5">For GPS to work, select photos directly from your <b>Files app → DCIM → Camera</b> folder, not from Gallery (Gallery strips location data when sharing)</div>
     </div>
   </div>
 
@@ -2147,12 +2151,41 @@ async function handleBulkPhotos(files){
     const dataUrl=await readFileAsDataUrl(file);
     let lat=null,lng=null,dateStr=null;
 
-    // Extract EXIF — manual binary parser (handles Samsung/Android) + exifr fallback
+    // Extract EXIF — manual binary parser supporting JPEG + WebP + exifr fallback
     try {
       const buf = await file.slice(0, 131072).arrayBuffer();
       const view = new DataView(buf);
+      const bytes = new Uint8Array(buf);
+      
+      // Check if WebP: RIFF....WEBP
+      const isWebP = bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46&&bytes[8]===0x57&&bytes[9]===0x45&&bytes[10]===0x42&&bytes[11]===0x50;
+      
+      if(isWebP) {
+        // Parse WebP chunks to find EXIF chunk
+        let woff = 12;
+        while(woff < buf.byteLength - 8) {
+          const cid = String.fromCharCode(bytes[woff],bytes[woff+1],bytes[woff+2],bytes[woff+3]);
+          const clen = view.getUint32(woff+4, true); // little endian
+          if(cid === 'EXIF') {
+            // Found EXIF chunk - parse it
+            const estart = woff + 8;
+            const ebo = view.getUint16(estart) === 0x4D4D;
+            const eu16 = (o) => ebo ? view.getUint16(estart+o) : view.getUint16(estart+o,true);
+            const eu32 = (o) => ebo ? view.getUint32(estart+o) : view.getUint32(estart+o,true);
+            const eifd = eu32(4);
+            const en2 = eu16(eifd);
+            let egps=null;
+            for(let i=0;i<en2;i++){const ep=eifd+2+i*12;const tag=eu16(ep);if(tag===0x8825)egps=eu32(ep+8);if(tag===0x9003){const vo=eu32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(estart+vo+c));dateStr=s.substring(0,10).replace(/:/g,'-');}}
+            if(egps!=null){const gn=eu16(egps);let lr='N',or2='E',ld=null,od=null;for(let i=0;i<gn;i++){const ep=egps+2+i*12;const tag=eu16(ep);if(tag===1)lr=String.fromCharCode(bytes[estart+ep+8]);else if(tag===3)or2=String.fromCharCode(bytes[estart+ep+8]);else if(tag===2||tag===4){const vo=eu32(ep+8);const c=[eu32(vo)/eu32(vo+4)||0,eu32(vo+8)/eu32(vo+12)||0,eu32(vo+16)/eu32(vo+20)||0];const dd=c[0]+c[1]/60+c[2]/3600;if(tag===2)ld=dd;else od=dd;}}if(ld!=null&&od!=null){lat=lr==='S'?-ld:ld;lng=or2==='W'?-od:od;}}
+            break;
+          }
+          woff += 8 + clen + (clen%2);
+        }
+      }
+      
+      // JPEG parsing
       let off = 2;
-      while(off < buf.byteLength - 4) {
+      while(!isWebP && off < buf.byteLength - 4) {
         const mk = view.getUint16(off);
         if(mk === 0xFFDA) break;
         if(mk === 0xFFE1) {
@@ -2325,7 +2358,16 @@ async function handleBulkPhotos(files){
             </div>
           `).join('')}
         </div>
-        ${g.lat?`<div style="font-size:10px;color:var(--muted);margin-top:8px">📍 ${g.lat.toFixed(4)}°N ${Math.abs(g.lng).toFixed(4)}°W</div>`:`<div style="margin-top:10px"><div style="font-size:10px;color:var(--muted);margin-bottom:4px">📍 No GPS — where was this trip?</div><input data-group-idx="${gi}" placeholder="e.g. Madison River, Montana" style="width:100%;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:7px 10px;font-size:12px;font-family:var(--sans);background:var(--bg);color:var(--ink);outline:none;box-sizing:border-box" oninput="_bulkTrips[${gi}].locationFull=this.value;_bulkTrips[${gi}].locationName=this.value.split(',')[0].trim()||'Unknown Location'"/></div>`}
+        ${g.lat?`<div style="font-size:10px;color:var(--muted);margin-top:8px">📍 ${g.lat.toFixed(4)}°N ${Math.abs(g.lng).toFixed(4)}°W</div>`:`<div style="margin-top:10px">
+  <div style="font-size:10px;color:var(--muted);margin-bottom:4px">📍 No GPS — search for the location</div>
+  <div style="position:relative">
+    <input id="bulkLocInput_${gi}" data-group-idx="${gi}" placeholder="Search river, creek, lake..." autocomplete="off"
+      style="width:100%;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:7px 10px 7px 28px;font-size:12px;font-family:var(--sans);background:var(--bg);color:var(--ink);outline:none;box-sizing:border-box"
+      oninput="bulkLocSearch(this,${gi})"/>
+    <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--muted);fill:none;stroke-width:2;pointer-events:none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <div id="bulkLocResults_${gi}" style="position:absolute;top:100%;left:0;right:0;background:var(--bg);border:1px solid rgba(0,0,0,.12);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;display:none;max-height:160px;overflow-y:auto;margin-top:2px"></div>
+  </div>
+</div>`}
       </div>`;
     previewsEl.appendChild(card);
   });
@@ -2333,6 +2375,52 @@ async function handleBulkPhotos(files){
   const totalCatches=groupList.reduce((s,g)=>s+g.photos.filter(p=>p.aiResult?.hasFish!==false).length,0);
   document.getElementById('bulkSaveLabel').textContent=`Save ${groupList.length} Trip${groupList.length!==1?'s':''} (${totalCatches} catches)`;
   document.getElementById('bulkSaveRow').style.display='block';
+}
+
+let _bulkLocTimer = {};
+function bulkLocSearch(input, gi){
+  const val = input.value.trim();
+  const resultsEl = document.getElementById('bulkLocResults_'+gi);
+  clearTimeout(_bulkLocTimer[gi]);
+  if(!val || val.length < 2){ if(resultsEl) resultsEl.style.display='none'; return; }
+  _bulkLocTimer[gi] = setTimeout(async function(){
+    try{
+      const q = encodeURIComponent(val);
+      const r = await fetch('https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=5&countrycodes=us,ca&addressdetails=1',
+        {headers:{'User-Agent':'DriftJournal/1.0','Accept-Language':'en'}});
+      const results = await r.json();
+      if(!resultsEl) return;
+      if(!results.length){
+        // "Use as typed" fallback
+        const fb=document.createElement('div');
+        fb.style.cssText='padding:8px 10px;font-size:12px;color:var(--muted);cursor:pointer';
+        fb.textContent='📍 Use "'+val+'" as location';
+        fb.onclick=function(){bulkLocSelect(gi,val,val,null,null);};
+        resultsEl.innerHTML='';resultsEl.appendChild(fb);
+        resultsEl.style.display='block'; return;
+      }
+      const waterTypes = new Set(['stream','river','creek','lake','reservoir','pond','waterway','water','bay','inlet','canal']);
+      const sorted = results.sort((a,b)=>{
+        const at=waterTypes.has(a.type)||waterTypes.has(a.class);
+        const bt=waterTypes.has(b.type)||waterTypes.has(b.class);
+        return bt-at;
+      });
+      resultsEl.style.display='block';
+    }catch(e){ console.log('bulk loc search err:',e.message); }
+  }, 400);
+}
+function bulkLocSelect(gi, name, full, lat, lng){
+  _bulkTrips[gi].locationName = name;
+  _bulkTrips[gi].locationFull = full;
+  _bulkTrips[gi].lat = lat;
+  _bulkTrips[gi].lng = lng;
+  const inp = document.getElementById('bulkLocInput_'+gi);
+  if(inp) inp.value = full;
+  const res = document.getElementById('bulkLocResults_'+gi);
+  if(res) res.style.display='none';
+  // Update the coord display
+  const coordEl = inp?.closest('[style*="margin-top:10px"]')?.querySelector('[data-coords]');
+  if(lat && coordEl) coordEl.textContent='📍 '+lat.toFixed(4)+'°N '+Math.abs(lng).toFixed(4)+'°W';
 }
 
 function readFileAsDataUrl(file){
