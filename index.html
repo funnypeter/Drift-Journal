@@ -499,7 +499,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   <div class="search-card">
     <div class="search-input-row">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input class="search-input" id="locSearchInput" placeholder="e.g. Taneum Creek, Madison River..." autocomplete="off" oninput="handleSearchDebounced(this.value)" onkeydown="if(event.key==='Enter'){var v=this.value.trim();if(v)claudeLocationSearch(v)}"/>
+      <input class="search-input" id="locSearchInput" placeholder="Search any river, creek or lake..." autocomplete="off" oninput="handleSearchDebounced(this.value)" onkeydown="if(event.key==='Enter'){var v=this.value.trim();if(v)nominatimSearch(v)}"/>
     </div>
     <div class="search-results" id="searchResults"></div>
   </div>
@@ -653,41 +653,26 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 <script>
 // ══ LOCATION DB ═══════════════════════════════════════════════
 // Each entry includes usgsId for auto-fetch
-const LOCATIONS=[
-  {n:"Madison River",r:"Madison County, MT",s:"Montana",lat:45.5,lng:-111.6,t:"river",usgsId:"06043500"},
-  {n:"Gallatin River",r:"Gallatin County, MT",s:"Montana",lat:45.3,lng:-111.1,t:"river",usgsId:"06043000"},
-  {n:"Yellowstone River",r:"Park County, MT",s:"Montana",lat:45.8,lng:-110.4,t:"river",usgsId:"06191500"},
-  {n:"Henry's Fork",r:"Fremont County, ID",s:"Idaho",lat:44.4,lng:-111.5,t:"river",usgsId:"13046000"},
-  {n:"Silver Creek",r:"Blaine County, ID",s:"Idaho",lat:43.2,lng:-114.8,t:"creek",usgsId:"13150800"},
-  {n:"Big Wood River",r:"Blaine County, ID",s:"Idaho",lat:43.7,lng:-114.4,t:"river",usgsId:"13139510"},
-  {n:"Snake River",r:"Twin Falls County, ID",s:"Idaho",lat:42.5,lng:-114.6,t:"river",usgsId:"13037500"},
-  {n:"Salmon River",r:"Lemhi County, ID",s:"Idaho",lat:44.8,lng:-114.1,t:"river",usgsId:"13302500"},
-  {n:"Middle Fork Salmon",r:"Custer County, ID",s:"Idaho",lat:44.4,lng:-115.0,t:"river",usgsId:"13309220"},
-  {n:"Firehole River",r:"Teton County, WY",s:"Wyoming",lat:44.5,lng:-110.8,t:"river",usgsId:"06036905"},
-  {n:"Green River",r:"Sweetwater County, WY",s:"Wyoming",lat:41.5,lng:-109.5,t:"river",usgsId:"09217000"},
-  {n:"Lamar River",r:"Park County, WY",s:"Wyoming",lat:44.9,lng:-110.1,t:"river",usgsId:"06187950"},
-  {n:"Slough Creek",r:"Park County, WY",s:"Wyoming",lat:44.9,lng:-110.2,t:"creek",usgsId:"06188000"},
-  {n:"South Platte River",r:"Jefferson County, CO",s:"Colorado",lat:39.5,lng:-105.2,t:"river",usgsId:"06711565"},
-  {n:"Frying Pan River",r:"Eagle County, CO",s:"Colorado",lat:39.4,lng:-107.0,t:"river",usgsId:"09080400"},
-  {n:"Roaring Fork River",r:"Garfield County, CO",s:"Colorado",lat:39.5,lng:-107.3,t:"river",usgsId:"09085000"},
-  {n:"Deschutes River",r:"Deschutes County, OR",s:"Oregon",lat:44.2,lng:-121.3,t:"river",usgsId:"14076500"},
-  {n:"Rogue River",r:"Jackson County, OR",s:"Oregon",lat:42.4,lng:-123.3,t:"river",usgsId:"14358000"},
-  {n:"Yakima River",r:"Yakima County, WA",s:"Washington",lat:46.7,lng:-120.5,t:"river",usgsId:"12499000"},
-  {n:"Skykomish River",r:"King County, WA",s:"Washington",lat:47.8,lng:-121.9,t:"river",usgsId:"12134500"},
-  {n:"Snoqualmie River",r:"King County, WA",s:"Washington",lat:47.5,lng:-121.8,t:"river",usgsId:"12149000"},
-  {n:"Middle Fork Snoqualmie River",r:"King County, WA",s:"Washington",lat:47.6,lng:-121.6,t:"river",usgsId:"12141300"},
-  {n:"Middle Fork Sammamish River",r:"King County, WA",s:"Washington",lat:47.6,lng:-122.0,t:"river",usgsId:"12122000"},
-  {n:"Sammamish River",r:"King County, WA",s:"Washington",lat:47.7,lng:-122.1,t:"river",usgsId:"12125000"},
-  {n:"Cedar River",r:"King County, WA",s:"Washington",lat:47.5,lng:-122.0,t:"river",usgsId:"12115000"},
-  {n:"Green River",r:"King County, WA",s:"Washington",lat:47.4,lng:-122.1,t:"river",usgsId:"12106700"},
-  {n:"Methow River",r:"Okanogan County, WA",s:"Washington",lat:48.2,lng:-120.2,t:"river",usgsId:"12449950"},
-  {n:"Skagit River",r:"Skagit County, WA",s:"Washington",lat:48.5,lng:-121.8,t:"river",usgsId:"12194000"},
-  {n:"Battenkill River",r:"Bennington County, VT",s:"Vermont",lat:43.1,lng:-73.2,t:"river",usgsId:"01362500"},
-  {n:"Beaverkill River",r:"Sullivan County, NY",s:"New York",lat:42.0,lng:-74.8,t:"river",usgsId:"01421000"},
-  {n:"Kenai River",r:"Kenai Peninsula, AK",s:"Alaska",lat:60.5,lng:-151.0,t:"river",usgsId:"15266300"},
-  {n:"San Juan River",r:"San Juan County, NM",s:"New Mexico",lat:36.8,lng:-107.6,t:"river",usgsId:"09355500"},
-  {n:"Lost Lake",r:"Teton County, WY",s:"Wyoming",lat:44.6,lng:-110.8,t:"lake",usgsId:null},
-];
+// Seed favorites — user's previously selected locations stored in localStorage
+// The full search now uses Nominatim (OpenStreetMap) for any waterway worldwide
+const LOCATION_FAVORITES_KEY='driftjournal_favorites';
+function getFavorites(){try{return JSON.parse(localStorage.getItem(LOCATION_FAVORITES_KEY)||'[]');}catch(e){return[];}}
+function saveFavorite(loc){
+  const favs=getFavorites().filter(f=>f.name!==loc.name);
+  favs.unshift(loc);
+  try{localStorage.setItem(LOCATION_FAVORITES_KEY,JSON.stringify(favs.slice(0,20)));}catch(e){}
+}
+// Keep a small curated list of well-known USGS gauge IDs for fast lookup
+const USGS_GAUGES={
+  'Middle Fork Snoqualmie River':'12141300','Snoqualmie River':'12149000',
+  'Skykomish River':'12134500','Yakima River':'12499000','Cedar River':'12115000',
+  'Sammamish River':'12125000','Middle Fork Sammamish River':'12122000',
+  'Green River':'12106700','Methow River':'12449950','Skagit River':'12194000',
+  'Madison River':'06043500','Gallatin River':'06043000','Yellowstone River':'06191500',
+  'Snake River':'13037500','Silver Creek':'13150800','Salmon River':'13302500',
+  'Deschutes River':'14076500','Rogue River':'14358000','Beaverkill River':'01421000',
+  'Battenkill River':'01362500','South Platte River':'09080000','Green River':'09217000',
+};
 
 const FLY_DATA={
   'Dry Flies':['Parachute Adams','Elk Hair Caddis','Royal Wulff','Blue Wing Olive','Stimulator','Pale Morning Dun',"Griffith's Gnat",'CDC Caddis'],
@@ -1158,85 +1143,166 @@ function handleCatchPhoto(i,e){
 
 // ══ LOCATION SEARCH ════════════════════════════════════════════
 let _searchTimer=null;
+let _nominatimController=null;
+
 function handleSearchDebounced(val){
-  handleSearch(val); // instant local results
   clearTimeout(_searchTimer);
-  if(val&&val.trim().length>=3){
-    _searchTimer=setTimeout(()=>claudeLocationSearch(val),1200); // Claude after 1.2s pause
+  if(_nominatimController) _nominatimController.abort();
+  showSearchResults([], val, true); // clear + show loading
+  if(!val||val.trim().length<2){
+    document.getElementById('searchResults').innerHTML='';
+    document.getElementById('locSearchSpinner').style.display='none';
+    return;
   }
+  _searchTimer=setTimeout(()=>nominatimSearch(val), 350);
 }
 
-// Local DB search (instant)
-function handleSearch(val){
-  const res=document.getElementById('searchResults');
-  if(!val||!val.trim()){res.innerHTML='';return}
-  const q=val.toLowerCase().trim();const words=q.split(/\s+/).filter(w=>w.length>0);
-  const scored=LOCATIONS.map(loc=>{
-    const str=(loc.n+' '+loc.r+' '+loc.s+' '+loc.t).toLowerCase();let score=0;
-    if(loc.n.toLowerCase()===q)score+=100;if(loc.n.toLowerCase().startsWith(q))score+=50;
-    if(words.every(w=>str.includes(w)))score+=40;
-    words.forEach(w=>{if(w.length>1&&loc.n.toLowerCase().includes(w))score+=20;if(w.length>2&&loc.r.toLowerCase().includes(w))score+=8;if(w.length>2&&loc.s.toLowerCase().includes(w))score+=6;});
-    return{loc,score}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,6);
-  const ti={river:'<svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>',creek:'<svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>',lake:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>',default:'<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'};
-  let html=scored.map(({loc})=>{
-    const fn=`${loc.n}, ${loc.s}`;
-    return `<div class="result-item" onclick="selectLocationObj(${JSON.stringify({n:loc.n,s:loc.s,r:loc.r,lat:loc.lat,lng:loc.lng,usgsId:loc.usgsId||null}).replace(/"/g,'&quot;')})">
-      <div class="result-icon">${ti[loc.t]||ti.default}</div>
-      <div><div class="result-name">${loc.n}</div><div class="result-region">${loc.r}</div><span class="result-badge">${loc.t}${loc.usgsId?' · USGS gauge':''}</span></div>
-    </div>`;
-  }).join('');
-  html+=`<div class="result-item use-as-typed" onclick="selectLocation('${val.replace(/'/g,"\\'")}',null,null,'','Custom location',null)">
-    <div class="result-icon use-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-    <div><div class="result-name">${val}</div><div class="result-region">Use exactly as typed</div><span class="result-badge custom">custom</span></div>
-  </div>`;
-  res.innerHTML=html;
-}
-// Claude AI location search
-async function claudeLocationSearch(val){
-  if(!val||!val.trim())return;
+async function nominatimSearch(val){
+  if(!val||!val.trim()) return;
   const spinner=document.getElementById('locSearchSpinner');
   spinner.style.display='block';
-  // Local results already shown by handleSearch
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({
-        model:'claude-sonnet-4-5-20251001',
-        max_tokens:600,
-        messages:[{role:'user',content:'The user is searching for a fishing location named: '+JSON.stringify(val)+'. List up to 4 real matching places (rivers, creeks, lakes) with precise GPS coordinates. Respond ONLY with a JSON array like: [{"name":"Taneum Creek","description":"Kittitas County, Washington","state":"Washington","lat":47.12,"lng":-120.57,"type":"creek"}]. Real places only, always include lat/lng.'}]
-      })
-    });
-    if(!resp.ok)throw new Error('API error '+resp.status);
-    const data=await resp.json();
-    const raw=data.content?.[0]?.text||'[]';
-    const clean=raw.replace(/```json|```/g,'').trim();
-    let suggestions=[];
-    try{suggestions=JSON.parse(clean);}catch(e){const m=raw.match(/\[[\s\S]*?\]/);if(m)try{suggestions=JSON.parse(m[0]);}catch(e2){}}
-    if(!suggestions.length){spinner.style.display='none';return;}
+  const res=document.getElementById('searchResults');
+  res.innerHTML='';
 
-    // Build suggestion HTML using DOM (no string escaping nightmares)
-    const container=document.createElement('div');
-    container.className='ai-loc-suggestions';
-    container.innerHTML='<div class="ai-loc-header"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>AI SUGGESTIONS</div>';
-    suggestions.forEach(function(s){
-      const item=document.createElement('div');
-      item.className='ai-loc-item';
-      item.innerHTML='<div class="ai-loc-name">'+s.name+'</div><div class="ai-loc-detail">'+(s.description||s.state||'')+'</div>'+(s.lat?'<div class="ai-loc-coords">'+parseFloat(s.lat).toFixed(4)+'°N, '+Math.abs(parseFloat(s.lng)).toFixed(4)+'°W</div>':'');
-      item.onclick=function(){
-        selectLocation(s.name+', '+s.state, parseFloat(s.lat)||null, parseFloat(s.lng)||null, s.state||'', s.description||s.state||'', null);
-      };
-      container.appendChild(item);
+  _nominatimController=new AbortController();
+
+  try{
+    // Search Nominatim - filter to water features for better fishing results
+    // Use waterway tag hint but also allow natural water features
+    const q=encodeURIComponent(val.trim());
+    const url=`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=8&countrycodes=us,ca&addressdetails=1`;
+    const r=await fetch(url,{
+      signal:_nominatimController.signal,
+      headers:{'User-Agent':'DriftJournal/1.0 (fishing app)','Accept-Language':'en'}
     });
-    document.getElementById('searchResults').appendChild(container);
+    if(!r.ok) throw new Error('Search failed');
+    const results=await r.json();
+
+    // Score and sort: water features first, then by relevance
+    const waterTypes=new Set(['stream','river','creek','lake','reservoir','pond','waterway','water','bay','inlet','channel','rapids','falls','spring','wetland','drain','ditch','canal']);
+    const scored=results.map(p=>{
+      const type=(p.type||p.class||'').toLowerCase();
+      const cls=(p.class||'').toLowerCase();
+      const isWater=waterTypes.has(type)||waterTypes.has(cls)||cls==='waterway'||cls==='natural'&&waterTypes.has(type);
+      const name=p.display_name||'';
+      return {p, score: isWater?100:50, isWater, type, name};
+    }).sort((a,b)=>b.score-a.score);
+
+    showSearchResults(scored, val, false);
+
   }catch(e){
-    console.log('Claude location search:',e.message);
+    if(e.name==='AbortError') return;
+    // Fallback to favorites search only
+    showSearchResults([], val, false);
+    console.log('Nominatim search error:', e.message);
   }
   spinner.style.display='none';
 }
+
+function showSearchResults(scored, val, loading){
+  const res=document.getElementById('searchResults');
+  const frag=document.createDocumentFragment();
+
+  // Show favorites that match first
+  const favs=getFavorites().filter(f=>f.name.toLowerCase().includes(val.toLowerCase())).slice(0,3);
+  if(favs.length){
+    const favHdr=document.createElement('div');
+    favHdr.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:8px 14px 4px';
+    favHdr.textContent='Recent';
+    frag.appendChild(favHdr);
+    favs.forEach(f=>{
+      const item=makeResultItem(f.name, f.region||f.state||'', 'recent', f.lat, f.lng, f.state, f.usgsId||null, true);
+      frag.appendChild(item);
+    });
+  }
+
+  // Show Nominatim results
+  if(scored.length){
+    const hdr=document.createElement('div');
+    hdr.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:8px 14px 4px';
+    hdr.textContent=favs.length?'Search Results':'Results';
+    frag.appendChild(hdr);
+
+    scored.slice(0,6).forEach(({p, isWater, type})=>{
+      const lat=parseFloat(p.lat);
+      const lng=parseFloat(p.lon);
+      const addr=p.address||{};
+      // Build clean display name
+      const mainName=p.name||val;
+      const state=addr.state||addr.county||'';
+      const country=addr.country_code==='us'?'USA':addr.country_code==='ca'?'Canada':'';
+      const region=[addr.county, state, country].filter(Boolean).join(', ');
+
+      // Look up known USGS gauge
+      const usgsId=USGS_GAUGES[mainName]||null;
+
+      const item=makeResultItem(mainName, region, type, lat, lng, state, usgsId, false);
+      frag.appendChild(item);
+    });
+  } else if(!loading && val.length>=2){
+    // No results — offer to use as-is
+    const none=document.createElement('div');
+    none.style.cssText='padding:12px 14px;font-size:12px;color:var(--muted)';
+    none.textContent='No waterways found. Try adding a state name (e.g. "Taneum Creek Washington")';
+    frag.appendChild(none);
+  }
+
+  // Always show "use as typed" option
+  const typed=makeResultItem(val, 'Use exactly as typed', 'custom', null, null, '', null, false);
+  frag.appendChild(typed);
+
+  res.innerHTML='';
+  res.appendChild(frag);
+}
+
+function makeResultItem(name, region, type, lat, lng, state, usgsId, isFavorite){
+  const item=document.createElement('div');
+  item.className='result-item';
+
+  // Icon based on type
+  const waterIcons={stream:'〜',river:'〜',creek:'〜',lake:'◉',reservoir:'◉',pond:'◉',recent:'★',custom:'⊕'};
+  const icon=waterIcons[type]||waterIcons.stream;
+
+  const iconEl=document.createElement('div');
+  iconEl.className='result-icon';
+  iconEl.style.cssText='font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--teal);width:32px';
+  iconEl.textContent=icon;
+
+  const textEl=document.createElement('div');
+  textEl.style.cssText='flex:1;min-width:0';
+
+  const nameEl=document.createElement('div');
+  nameEl.className='result-name';
+  nameEl.textContent=name;
+
+  const regionEl=document.createElement('div');
+  regionEl.className='result-region';
+  regionEl.textContent=region;
+
+  const badgeEl=document.createElement('span');
+  badgeEl.className='result-badge'+(isFavorite?' favorite':'');
+  badgeEl.style.cssText='font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--teal);background:var(--teal-light);padding:2px 7px;border-radius:20px';
+  badgeEl.textContent=isFavorite?'recent':type==='custom'?'custom':usgsId?'USGS gauge':type||'water';
+
+  textEl.appendChild(nameEl);
+  textEl.appendChild(regionEl);
+  textEl.appendChild(badgeEl);
+
+  item.appendChild(iconEl);
+  item.appendChild(textEl);
+
+  item.onclick=function(){
+    const fullName=state&&!name.includes(state)?name+', '+state:name;
+    selectLocation(fullName, lat, lng, state, region, usgsId);
+    // Save to favorites
+    saveFavorite({name:fullName, region, state, lat, lng, usgsId});
+  };
+  return item;
+}
+
+// handleSearch kept as alias for compatibility
+function handleSearch(val){ handleSearchDebounced(val); }
+
 function selectLocationObj(locStr){
   const loc=typeof locStr==='string'?JSON.parse(locStr.replace(/&quot;/g,'"')):locStr;
   selectLocation(`${loc.n}, ${loc.s}`,loc.lat,loc.lng,loc.s,loc.r,loc.usgsId);
