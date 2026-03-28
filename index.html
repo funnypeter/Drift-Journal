@@ -2147,36 +2147,70 @@ async function handleBulkPhotos(files){
     const dataUrl=await readFileAsDataUrl(file);
     let lat=null,lng=null,dateStr=null;
 
-    // Extract EXIF — try multiple approaches, fall back gracefully
-    try{
-      // Try exifr GPS first (most reliable for GPS)
-      const gps = await exifr.gps(file);
-      if(gps && gps.latitude != null && gps.longitude != null){
-        lat = gps.latitude;
-        lng = gps.longitude;
+    // Extract EXIF — manual binary parser (handles Samsung/Android) + exifr fallback
+    try {
+      const buf = await file.slice(0, 131072).arrayBuffer();
+      const view = new DataView(buf);
+      let off = 2;
+      while(off < buf.byteLength - 4) {
+        const mk = view.getUint16(off);
+        if(mk === 0xFFDA) break;
+        if(mk === 0xFFE1) {
+          const segLen = view.getUint16(off+2);
+          if(view.getUint32(off+4) === 0x45786966) {
+            const base = off + 10;
+            const be = view.getUint16(base) === 0x4D4D;
+            const u16 = (o) => be ? view.getUint16(base+o) : view.getUint16(base+o,true);
+            const u32 = (o) => be ? view.getUint32(base+o) : view.getUint32(base+o,true);
+            const ifd = u32(4);
+            const n = u16(ifd);
+            let gpsOff=null, exifOff=null;
+            for(let i=0;i<n;i++){
+              const ep=ifd+2+i*12;
+              const tag=u16(ep);
+              if(tag===0x8825) gpsOff=u32(ep+8);
+              if(tag===0x8769) exifOff=u32(ep+8);
+              if(tag===0x0132){const vo=u32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(base+vo+c));if(!dateStr&&s[4]===':')dateStr=s.substring(0,10).replace(/:/g,'-');}
+            }
+            if(gpsOff!=null){
+              const gn=u16(gpsOff); let lRef='N',oRef='E',lD=null,oD=null;
+              for(let i=0;i<gn;i++){
+                const ep=gpsOff+2+i*12;
+                if(ep+12>buf.byteLength) break;
+                const tag=u16(ep);
+                if(tag===1) lRef=String.fromCharCode(view.getUint8(ep+8));
+                else if(tag===3) oRef=String.fromCharCode(view.getUint8(ep+8));
+                else if(tag===2||tag===4){
+                  const vo=u32(ep+8); const c=[];
+                  for(let j=0;j<3;j++){const nm=u32(vo+j*8);const dn=u32(vo+j*8+4);c.push(dn?nm/dn:0);}
+                  const dd=c[0]+c[1]/60+c[2]/3600;
+                  if(tag===2)lD=dd; else oD=dd;
+                }
+              }
+              if(lD!=null&&oD!=null){lat=lRef==='S'?-lD:lD; lng=oRef==='W'?-oD:oD;}
+            }
+            if(!dateStr&&exifOff!=null){
+              const en=u16(exifOff);
+              for(let i=0;i<en;i++){
+                const ep=exifOff+2+i*12;
+                if(ep+12>buf.byteLength) break;
+                const tag=u16(ep);
+                if(tag===0x9003){const vo=u32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(base+vo+c));dateStr=s.substring(0,10).replace(/:/g,'-');}
+              }
+            }
+          }
+          off+=2+segLen; continue;
+        }
+        if((mk&0xFF00)===0xFF00){off+=2+view.getUint16(off+2);}else{off++;}
       }
-    }catch(e){}
+    } catch(e){ console.log('binary EXIF err:',e.message); }
 
-    try{
-      // Try full EXIF parse for date
-      const exif = await exifr.parse(file, {tiff:true,exif:true,gps:true,ifd0:true,interop:false,thumbnail:false});
-      if(exif){
-        if(!lat && exif.latitude) lat = exif.latitude;
-        if(!lng && exif.longitude) lng = exif.longitude;
-        const rawDate = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime || exif.GPSDateStamp;
-        if(rawDate instanceof Date) dateStr = rawDate.toISOString().split('T')[0];
-        else if(typeof rawDate === 'string') dateStr = rawDate.substring(0,10).replace(/:/g,'-');
-      }
-    }catch(e){}
-
-    // Fallback: parse date from filename (e.g. "20251013_145244.jpg" or "IMG_20251013_145244.jpg")
-    if(!dateStr){
-      const nameMatch = file.name.match(/(\d{4})(\d{2})(\d{2})[_-](\d{6})/);
-      if(nameMatch){
-        dateStr = nameMatch[1]+'-'+nameMatch[2]+'-'+nameMatch[3];
-        console.log('Date from filename:', dateStr, file.name);
-      }
-    }
+    // Fallback: exifr
+    if(lat==null){try{const g=await exifr.gps(file);if(g?.latitude!=null){lat=g.latitude;lng=g.longitude;}}catch(e){}}
+    if(!dateStr){try{const ex=await exifr.parse(file,{tiff:true,exif:true,ifd0:true,thumbnail:false});if(ex){const rd=ex.DateTimeOriginal||ex.CreateDate||ex.DateTime;if(rd instanceof Date)dateStr=rd.toISOString().split('T')[0];else if(typeof rd==='string')dateStr=rd.substring(0,10).replace(/:/g,'-');}}catch(e){}}
+    // Filename fallback
+    if(!dateStr){const m=file.name.match(/(?:^|_|IMG_)(\d{4})(\d{2})(\d{2})[_\s-](\d{4,6})/);if(m)dateStr=m[1]+'-'+m[2]+'-'+m[3];else if(file.lastModified){const d=new Date(file.lastModified);dateStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}}
+    console.log('EXIF:', file.name, 'GPS:', lat&&lat.toFixed(5), lng&&lng.toFixed(5), 'Date:', dateStr);
 
     // Fallback: use today's date if no EXIF date
     if(!dateStr) dateStr=new Date().toISOString().split('T')[0];
