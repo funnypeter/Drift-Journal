@@ -1,50 +1,37 @@
-// Drift Journal Service Worker
-const CACHE = 'drift-v1';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap'
-];
+// Drift Journal Service Worker v2
+const CACHE = 'drift-v2';  // bump version to force cache refresh
+const ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
-// Install: cache all assets
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => {
-      // Cache local assets immediately, fonts best-effort
-      return cache.addAll(['/', '/index.html', '/manifest.json'])
-        .then(() => cache.addAll(['/icon-192.png', '/icon-512.png']).catch(() => {}))
-        .then(() => cache.addAll([
-          'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap'
-        ]).catch(() => {}));
-    })
+    caches.open(CACHE).then(cache => cache.addAll(ASSETS).catch(() => {}))
   );
-  self.skipWaiting();
+  self.skipWaiting(); // activate immediately
 });
 
-// Activate: clean old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE).map(k => {
+        console.log('Deleting old cache:', k);
+        return caches.delete(k);
+      }))
     )
   );
-  self.clients.claim();
+  self.clients.claim(); // take control immediately
 });
 
-// Fetch: serve from cache, fall back to network
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // Never cache API calls (USGS, Anthropic)
-  if (url.hostname.includes('usgs.gov') || url.hostname.includes('anthropic.com')) {
-    return; // Let browser handle normally
+  // Never cache API calls
+  if (url.hostname.includes('usgs.gov') || 
+      url.hostname.includes('anthropic.com') ||
+      url.hostname.includes('open-meteo.com') ||
+      url.hostname.includes('nominatim.openstreetmap.org')) {
+    return;
   }
-
-  // For Google Fonts — network first, cache fallback
-  if (url.hostname.includes('fonts.')) {
+  // Network first for HTML (always get fresh app)
+  if (e.request.destination === 'document' || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request)
         .then(r => { caches.open(CACHE).then(c => c.put(e.request, r.clone())); return r; })
@@ -52,15 +39,12 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-
-  // For app files — cache first, network fallback
+  // Cache first for everything else
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(r => {
-        if (r.status === 200) {
-          caches.open(CACHE).then(c => c.put(e.request, r.clone()));
-        }
+        if (r.status === 200) caches.open(CACHE).then(c => c.put(e.request, r.clone()));
         return r;
       });
     })
