@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Drift Journal">
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap');
@@ -403,7 +404,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 .catch-detail-img{height:130px;background:linear-gradient(135deg,#2a4a3a,#1a2e20);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;flex-direction:column}
 .catch-detail-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .catch-detail-time{position:absolute;bottom:5px;left:7px;background:rgba(0,0,0,.55);color:white;font-size:9px;padding:2px 5px;border-radius:3px}
-.map-mini{margin:16px 16px 0;border-radius:var(--radius);overflow:hidden;height:130px;position:relative;background:#c8dfe8}
+.map-mini{margin:16px 16px 0;border-radius:var(--radius);overflow:hidden;height:180px;position:relative;background:#c8dfe8}
 .map-mini-btn{position:absolute;bottom:10px;right:10px;background:var(--teal);color:white;font-size:11px;font-weight:600;padding:7px 14px;border-radius:6px;border:none;cursor:pointer}
 .map-coords{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.85);font-size:9px;padding:4px 8px;border-radius:4px;color:var(--ink2);line-height:1.4}
 
@@ -473,15 +474,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 <div class="view active" id="vHome">
   <h1 class="feed-title">Recent Journeys</h1>
   <div class="feed-line"></div>
-  <div class="feed-container"><div id="apiKeyBanner" style="display:none;margin:12px 16px;background:linear-gradient(135deg,#1e4d43,#2a6b5e);border-radius:12px;padding:16px;color:white">
-  <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.8;margin-bottom:4px">⚡ Enable AI Features</div>
-  <div style="font-size:13px;margin-bottom:12px;line-height:1.5;opacity:.9">Add your Anthropic API key to enable fish identification, location search, and USGS data.</div>
-  <div style="display:flex;gap:8px">
-    <input id="apiBannerKey" type="password" placeholder="sk-ant-api03-..." style="flex:1;border:none;border-radius:8px;padding:9px 12px;font-size:12px;font-family:monospace;outline:none;background:rgba(255,255,255,.15);color:white;placeholder-color:rgba(255,255,255,.5)" />
-    <button onclick="saveBannerApiKey()" style="background:white;color:#1e4d43;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button>
-  </div>
-  <div style="font-size:10px;opacity:.6;margin-top:8px">Get a free key at <a href="https://console.anthropic.com/account/keys" target="_blank" style="color:white;text-decoration:underline">console.anthropic.com</a> · Saved locally, never sent anywhere else</div>
-</div>
+  <div class="feed-container">
 <div id="feedContent"></div></div>
 </div>
 
@@ -589,11 +582,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </div><!-- end log-form -->
 <div class="view" id="vMap">
   <div class="map-title">Trip Map</div>
-  <div style="font-size:12px;color:var(--muted);padding:0 16px 16px">All your fishing locations</div>
-  <div style="margin:0 16px;border-radius:var(--radius);overflow:hidden;height:260px;position:relative;background:#c8dfe8">
-    <svg width="100%" height="260" viewBox="0 0 358 260"><rect width="358" height="260" fill="#c8dfe8"/><path d="M0,65 Q60,50 120,70 Q180,90 240,65 Q300,40 358,60 L358,260 L0,260 Z" fill="#d4e9c0"/><path d="M75,15 Q80,50 76,90 Q72,130 80,165 Q88,200 76,240" stroke="#87bbd0" fill="none" stroke-width="5" stroke-linecap="round"/><path d="M210,0 Q206,40 214,85 Q222,125 210,170 Q198,210 208,255" stroke="#87bbd0" fill="none" stroke-width="4" stroke-linecap="round"/><g id="mapPinsGroup"></g></svg>
-  </div>
-  <div style="padding:16px"><div style="font-family:var(--serif);font-size:1.05rem;font-weight:700;margin-bottom:10px">All Trips</div><div id="mapTripList"></div></div>
+  <div style="font-size:12px;color:var(--muted);padding:0 16px 12px">All your fishing locations</div>
+  <div id="leafletMap" style="margin:0 16px;border-radius:var(--radius);overflow:hidden;height:320px;position:relative;z-index:1"></div>
+  <div style="padding:16px 16px 8px;font-family:var(--serif);font-size:1.3rem;font-weight:700">All Trips</div>
+  <div id="mapTripList"></div>
 </div>
 
 <!-- PROFILE -->
@@ -640,7 +632,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     </div>
     <span class="bnav-log-label">LOG</span>
   </div>
-  <button class="bnav-item" id="btn-map" onclick="switchTab('vMap','btn-map')">
+  <button class="bnav-item" id="btn-map" onclick="switchTab('vMap','btn-map');onMapTabShown()">
     <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>MAP
   </button>
   <button class="bnav-item" id="btn-profile" onclick="switchTab('vProfile','btn-profile')">
@@ -707,7 +699,7 @@ let selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
 let currentEntryIdx=null;
 
 // ══ UTILS ══════════════════════════════════════════════════════
-function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
+function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
 function switchTab(v,b){showView(v);document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function fmtDisplay(d){const p=d.split('-');return MONTHS[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')+', '+p[0]}
@@ -993,8 +985,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'anthropic-dangerous-direct-browser-access':'true',
-        ...(_apiKey ? {'x-api-key': _apiKey} : {})
+        'anthropic-dangerous-direct-browser-access':'true'
       },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
@@ -1454,9 +1445,6 @@ function sealEntry(){
 
 
 function renderFeed(){
-  // Show API key banner if no key is configured
-  const banner=document.getElementById('apiKeyBanner');
-  if(banner) banner.style.display=(!_apiKey)?'block':'none';
   const sorted=sortedTrips();const fc=document.getElementById('feedContent');
   if(!sorted.length){fc.innerHTML=`<div class="empty-feed"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><h3>No journeys yet</h3><p>Tap + to log your first trip.</p><button onclick="startNewEntry()">Log First Trip</button></div>`;return}
   fc.innerHTML=sorted.map((t,i)=>{
@@ -1526,11 +1514,114 @@ function closeAllCatchCards(){
   if(bd) bd.classList.remove('active');
   document.body.style.overflow='';
 }
+let _leafletMap = null;
+let _leafletMarkers = [];
+
 function renderMap(){
-  const sorted=sortedTrips();const pp=[{cx:80,cy:105},{cx:210,cy:75},{cx:155,cy:180},{cx:120,cy:50},{cx:250,cy:130}];
-  document.getElementById('mapPinsGroup').innerHTML=sorted.map((t,i)=>{const p=pp[i%pp.length];const idx=trips.indexOf(t);return `<g style="cursor:pointer" onclick="openEntry(${idx})"><circle cx="${p.cx}" cy="${p.cy}" r="12" fill="#1e4d43" opacity=".2"/><circle cx="${p.cx}" cy="${p.cy}" r="8" fill="#1e4d43"/><circle cx="${p.cx}" cy="${p.cy}" r="4" fill="white"/><text x="${p.cx+13}" y="${p.cy+4}" font-size="9" fill="#1e4d43" font-weight="600" font-family="Inter,sans-serif">${t.location.split(',')[0]}</text></g>`}).join('');
-  document.getElementById('mapTripList').innerHTML=sorted.map((t,i)=>{const idx=trips.indexOf(t);return `<div onclick="openEntry(${idx})" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:${i<sorted.length-1?'1px solid rgba(0,0,0,.07)':'none'};cursor:pointer"><div style="width:9px;height:9px;border-radius:50%;background:var(--teal);flex-shrink:0"></div><div><div style="font-size:13px;font-weight:600">${t.title}</div><div style="font-size:11px;color:var(--muted)">${t.location} · ${fmtShort(t.date)}</div></div><svg style="margin-left:auto;width:15px;height:15px;stroke:var(--muted);fill:none;stroke-width:2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>`}).join('');
+  const sorted = sortedTrips();
+
+  // ── Trip list below map ──
+  document.getElementById('mapTripList').innerHTML = sorted.map((t,i) => {
+    const idx = trips.indexOf(t);
+    return `<div onclick="openEntry(${idx})" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:${i<sorted.length-1?'1px solid rgba(0,0,0,.07)':'none'};cursor:pointer">
+      <div style="width:9px;height:9px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div>
+        <div style="font-size:11px;color:var(--muted)">${t.location} · ${fmtShort(t.date)}</div>
+      </div>
+      <svg style="flex-shrink:0;width:14px;height:14px;stroke:var(--muted);fill:none;stroke-width:2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+    </div>`;
+  }).join('');
+
+  // ── Init Leaflet map ──
+  const container = document.getElementById('leafletMap');
+  if(!container) return;
+
+  // Destroy old map instance if exists
+  if(_leafletMap){
+    _leafletMap.remove();
+    _leafletMap = null;
+    _leafletMarkers = [];
+  }
+
+  // Collect valid trip coords
+  const points = sorted.filter(t => t.lat && t.lng);
+
+  // Default center: western US if no trips
+  let center = [44.5, -113.5];
+  let zoom = 5;
+
+  if(points.length === 1){
+    center = [points[0].lat, points[0].lng];
+    zoom = 11;
+  }
+
+  // Init map with OpenStreetMap tiles
+  _leafletMap = L.map('leafletMap', {
+    center: center,
+    zoom: zoom,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  // Use a clean, minimal tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(_leafletMap);
+
+  // Custom teal marker icon
+  const markerIcon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:28px;height:28px;
+      background:var(--teal,#1e4d43);
+      border:3px solid white;
+      border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);
+      box-shadow:0 2px 8px rgba(0,0,0,.35);
+    "></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -30]
+  });
+
+  // Add markers for each trip
+  const latlngs = [];
+  points.forEach(t => {
+    const idx = trips.indexOf(t);
+    const catchCount = t.catches_list?.length || 0;
+    const marker = L.marker([t.lat, t.lng], { icon: markerIcon })
+      .addTo(_leafletMap)
+      .bindPopup(`
+        <div style="font-family:var(--serif,'Georgia');min-width:160px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${t.title}</div>
+          <div style="font-size:11px;color:#666;margin-bottom:6px">${t.location} · ${fmtShort(t.date)}</div>
+          ${t.flow ? `<div style="font-size:11px">🌊 ${t.flow}</div>` : ''}
+          ${t.water ? `<div style="font-size:11px">🌡 ${t.water}</div>` : ''}
+          ${catchCount ? `<div style="font-size:11px">🎣 ${catchCount} catch${catchCount>1?'es':''}</div>` : ''}
+          <button onclick="openEntry(${idx})" style="margin-top:8px;background:#1e4d43;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;width:100%">View Entry →</button>
+        </div>
+      `, { maxWidth: 220 });
+    _leafletMarkers.push(marker);
+    latlngs.push([t.lat, t.lng]);
+  });
+
+  // Fit map to show all markers
+  if(latlngs.length > 1){
+    _leafletMap.fitBounds(latlngs, { padding: [40, 40] });
+  }
 }
+
+// Re-render map when tab becomes visible (Leaflet needs container to be visible)
+function onMapTabShown(){
+  if(_leafletMap){
+    setTimeout(() => _leafletMap.invalidateSize(), 100);
+  } else {
+    renderMap();
+  }
+}
+
 
 // ══ ENTRY DETAIL ══════════════════════════════════════════════
 function openEntry(idx){
@@ -1609,12 +1700,37 @@ function openEntry(idx){
         <div class="fn-text">${e.notes}</div>
         <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:10px;color:var(--muted)"><span>Logged · ${e.displayDate}</span><span>✦</span></div>
       </div>`:'' }
-    <div class="map-mini">
-      <svg width="100%" height="130" viewBox="0 0 358 130"><rect width="358" height="130" fill="#c8dfe8"/><path d="M0,38 Q90,25 180,45 Q270,65 358,40 L358,130 L0,130 Z" fill="#d4e9c0"/><circle cx="179" cy="62" r="12" fill="#1e4d43" opacity=".18"/><circle cx="179" cy="62" r="8" fill="#1e4d43"/><circle cx="179" cy="62" r="4" fill="white"/></svg>
-      <div class="map-coords">POSITION<br>${e.lat?e.lat.toFixed(4)+'° N':'—'}<br>${e.lng?Math.abs(e.lng).toFixed(4)+'° W':'—'}</div>
-      <button class="map-mini-btn" onclick="switchTab('vMap','btn-map')">VIEW FULL MAP</button>
+    <div class="map-mini" id="entryMiniMap" style="height:180px;border-radius:12px;overflow:hidden;margin:16px 16px 0;position:relative">
+      <div id="miniMapTile" style="width:100%;height:100%"></div>
+      <button class="map-mini-btn" onclick="switchTab('vMap','btn-map');onMapTabShown()" style="position:absolute;bottom:10px;right:10px;z-index:500">VIEW FULL MAP</button>
     </div>`;
   showView('vEntry');document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(b=>b.classList.remove('active'));
+  // Initialize real mini-map for this entry
+  setTimeout(function(){
+    const miniEl=document.getElementById('miniMapTile');
+    if(!miniEl) return;
+    // Remove any previous map instance
+    if(window._miniMap){window._miniMap.remove();window._miniMap=null;}
+    if(e.lat&&e.lng){
+      window._miniMap=L.map('miniMapTile',{
+        center:[e.lat,e.lng],zoom:12,
+        zoomControl:false,attributionControl:false,
+        dragging:false,scrollWheelZoom:false,doubleClickZoom:false
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        maxZoom:18
+      }).addTo(window._miniMap);
+      // Custom teal pin marker
+      const icon=L.divIcon({
+        html:'<div style="width:14px;height:14px;background:#1e4d43;border:2.5px solid white;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.35)"></div>',
+        iconSize:[14,14],iconAnchor:[7,7],className:''
+      });
+      L.marker([e.lat,e.lng],{icon}).addTo(window._miniMap);
+    } else {
+      miniEl.style.background='#c8dfe8';
+      miniEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8a8474;font-size:12px">No location data</div>';
+    }
+  },100);
 }
 
 // ══ EDIT ENTRY — inline editing on the entry page ══════════════
@@ -1781,6 +1897,7 @@ renderFeed();renderMap();
 document.getElementById('statTrips').textContent=trips.length;
 document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // Register service worker for PWA offline support
 if('serviceWorker' in navigator){
