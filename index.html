@@ -599,6 +599,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   <div id="mapTripList"></div>
 </div>
 
+<!-- ENTRY MINI MAP MODAL -->
+<div id="entryMapModal" style="display:none;position:fixed;inset:0;z-index:700;background:#000;flex-direction:column">
+  <div style="position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:env(safe-area-inset-top,12px) 16px 12px;background:linear-gradient(to bottom,rgba(0,0,0,.65),transparent)">
+    <div id="entryMapModalTitle" style="color:white;font-family:var(--serif);font-size:1.05rem;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.5)"></div>
+    <button onclick="closeEntryMapModal()" style="background:rgba(0,0,0,.5);backdrop-filter:blur(6px);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+  </div>
+  <div id="entryMapModalMap" style="width:100%;height:100%"></div>
+</div>
+
 <!-- FULL SCREEN MAP MODAL -->
 <div id="mapModal" style="display:none;position:fixed;inset:0;z-index:600;background:#000;flex-direction:column">
   <!-- Modal header -->
@@ -736,7 +745,7 @@ let selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
 let currentEntryIdx=null;
 
 // ══ UTILS ══════════════════════════════════════════════════════
-function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
+function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}if(id!=='vEntry')closeEntryMapModal();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
 function switchTab(v,b){showView(v);document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function fmtDisplay(d){const p=d.split('-');return MONTHS[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')+', '+p[0]}
@@ -1564,6 +1573,50 @@ function closeAllCatchCards(){
 let _leafletMap = null;
 let _leafletMarkers = [];
 
+function openEntryMapModal(){
+  const modal=document.getElementById('entryMapModal');
+  if(!modal) return;
+  modal.style.display='flex';
+  document.body.style.overflow='hidden';
+  // Set title from current entry
+  const e=trips[currentEntryIdx];
+  const titleEl=document.getElementById('entryMapModalTitle');
+  if(titleEl&&e) titleEl.textContent=e.location||e.title||'Location';
+  setTimeout(function(){
+    if(window._entryModal){window._entryModal.remove();window._entryModal=null;}
+    if(!e||!e.lat||!e.lng){
+      document.getElementById('entryMapModalMap').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px">No location data for this entry</div>';
+      return;
+    }
+    try{
+      window._entryModal=new mapboxgl.Map({
+        container:'entryMapModalMap',
+        style:'mapbox://styles/mapbox/outdoors-v12',
+        center:[e.lng,e.lat],
+        zoom:12,
+        attributionControl:false
+      });
+      window._entryModal.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-right');
+      window._entryModal.on('load',function(){
+        // Teal dot pin
+        const el=document.createElement('div');
+        el.style.cssText='width:16px;height:16px;background:#1e4d43;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+        new mapboxgl.Marker({element:el}).setLngLat([e.lng,e.lat]).addTo(window._entryModal);
+        // Popup with entry info
+        new mapboxgl.Popup({offset:20,closeButton:false,maxWidth:'200px'})
+          .setLngLat([e.lng,e.lat])
+          .setHTML('<div style="font-family:Inter,sans-serif"><div style="font-weight:700;font-size:13px">'+(e.title||'')+'</div><div style="font-size:11px;color:#666;margin-top:2px">'+(e.location||'')+'</div>'+(e.flow?'<div style="font-size:11px;margin-top:4px">🌊 '+e.flow+'</div>':'')+'</div>')
+          .addTo(window._entryModal);
+      });
+    }catch(err){console.log('entry map error:',err.message);}
+  },50);
+}
+function closeEntryMapModal(){
+  document.getElementById('entryMapModal').style.display='none';
+  document.body.style.overflow='';
+  if(window._entryModal){window._entryModal.remove();window._entryModal=null;}
+}
+
 function openMapModal(){
   const modal=document.getElementById('mapModal');
   modal.style.display='flex';
@@ -1767,9 +1820,12 @@ function openEntry(idx){
         <div class="fn-text">${e.notes}</div>
         <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:10px;color:var(--muted)"><span>Logged · ${e.displayDate}</span><span>✦</span></div>
       </div>`:'' }
-    <div class="map-mini" id="entryMiniMap" style="height:180px;border-radius:12px;overflow:hidden;margin:16px 16px 0;position:relative">
-      <div id="miniMapTile" style="width:100%;height:100%"></div>
-      <button class="map-mini-btn" onclick="switchTab('vMap','btn-map');onMapTabShown()" style="position:absolute;bottom:10px;right:10px;z-index:500">VIEW FULL MAP</button>
+    <div id="entryMiniMap" onclick="openEntryMapModal()" style="height:180px;border-radius:12px;overflow:hidden;margin:16px 16px 24px;position:relative;cursor:pointer;background:#c8dfe8">
+      <div id="miniMapTile" style="width:100%;height:100%;pointer-events:none"></div>
+      <div style="position:absolute;bottom:10px;right:10px;z-index:10;background:var(--teal);color:white;font-size:11px;font-weight:700;padding:7px 13px;border-radius:6px;display:flex;align-items:center;gap:5px;pointer-events:none;letter-spacing:.03em">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        EXPAND
+      </div>
     </div>`;
   showView('vEntry');document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(b=>b.classList.remove('active'));
   // Initialize real mini-map for this entry
@@ -2006,18 +2062,23 @@ function installApp(){
   }
 }
 
-// Swipe down to close map modal
+// Swipe down to close both map modals
 (function(){
   let _swipeStartY=0;
   document.addEventListener('touchstart',function(e){
-    if(document.getElementById('mapModal')?.style.display==='flex'){
+    const mm=document.getElementById('mapModal');
+    const em=document.getElementById('entryMapModal');
+    if((mm&&mm.style.display==='flex')||(em&&em.style.display==='flex')){
       _swipeStartY=e.touches[0].clientY;
     }
   },{passive:true});
   document.addEventListener('touchend',function(e){
-    if(document.getElementById('mapModal')?.style.display==='flex'){
-      const dy=e.changedTouches[0].clientY-_swipeStartY;
-      if(dy>80) closeMapModal();
+    const dy=e.changedTouches[0].clientY-_swipeStartY;
+    if(dy>80){
+      const mm=document.getElementById('mapModal');
+      const em=document.getElementById('entryMapModal');
+      if(mm&&mm.style.display==='flex') closeMapModal();
+      if(em&&em.style.display==='flex') closeEntryMapModal();
     }
   },{passive:true});
 })();
