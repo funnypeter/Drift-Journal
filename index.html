@@ -2147,33 +2147,36 @@ async function handleBulkPhotos(files){
     const dataUrl=await readFileAsDataUrl(file);
     let lat=null,lng=null,dateStr=null;
 
-    // Extract EXIF — use dedicated functions from exifr lite build
+    // Extract EXIF — try multiple approaches, fall back gracefully
     try{
-      // GPS: exifr.gps() is the correct API for the lite build
+      // Try exifr GPS first (most reliable for GPS)
       const gps = await exifr.gps(file);
-      if(gps && gps.latitude && gps.longitude){
+      if(gps && gps.latitude != null && gps.longitude != null){
         lat = gps.latitude;
         lng = gps.longitude;
-        console.log('GPS found:', lat, lng);
       }
-    }catch(gpsErr){console.log('GPS error:',gpsErr.message);}
+    }catch(e){}
 
     try{
-      // Date: parse full EXIF for date fields
-      const exif = await exifr.parse(file, {tiff:true, exif:true, gps:true, ifd0:true});
+      // Try full EXIF parse for date
+      const exif = await exifr.parse(file, {tiff:true,exif:true,gps:true,ifd0:true,interop:false,thumbnail:false});
       if(exif){
-        const rawDate = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime;
-        if(rawDate){
-          if(rawDate instanceof Date){
-            dateStr = rawDate.toISOString().split('T')[0];
-          } else if(typeof rawDate === 'string'){
-            // EXIF date format: "2023:10:14 09:15:00" → "2023-10-14"
-            dateStr = rawDate.substring(0,10).replace(/:/g,'-');
-          }
-        }
-        console.log('Date found:', dateStr);
+        if(!lat && exif.latitude) lat = exif.latitude;
+        if(!lng && exif.longitude) lng = exif.longitude;
+        const rawDate = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime || exif.GPSDateStamp;
+        if(rawDate instanceof Date) dateStr = rawDate.toISOString().split('T')[0];
+        else if(typeof rawDate === 'string') dateStr = rawDate.substring(0,10).replace(/:/g,'-');
       }
-    }catch(dateErr){console.log('Date error:',dateErr.message);}
+    }catch(e){}
+
+    // Fallback: parse date from filename (e.g. "20251013_145244.jpg" or "IMG_20251013_145244.jpg")
+    if(!dateStr){
+      const nameMatch = file.name.match(/(\d{4})(\d{2})(\d{2})[_-](\d{6})/);
+      if(nameMatch){
+        dateStr = nameMatch[1]+'-'+nameMatch[2]+'-'+nameMatch[3];
+        console.log('Date from filename:', dateStr, file.name);
+      }
+    }
 
     // Fallback: use today's date if no EXIF date
     if(!dateStr) dateStr=new Date().toISOString().split('T')[0];
