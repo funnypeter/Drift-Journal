@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fan Companion Prototype</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0A0A1A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React & ReactDOM from CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone for JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ── Fandom brand colors ──
+    const COLORS = {
+      fandomPurple: "#3A1166",
+      fandomMagenta: "#E8175D",
+      fandomTeal: "#00D6D6",
+      fandomYellow: "#FFC800",
+      fandomDark: "#1A1A2E",
+      fandomCard: "#222244",
+      fandomCardHover: "#2A2A55",
+      metacriticGreen: "#66CC33",
+      metacriticYellow: "#FFCC33",
+      metacriticRed: "#FF0000",
+      fanaticalOrange: "#FF6B00",
+      gamespotRed: "#E02020",
+    };
+
+    // ── Mock data grounded in real Fandom intelligence ──
+    const TRENDING_TITLES = [
+      {
+        id: 1, title: "Crimson Desert", type: "game", studio: "Pearl Abyss",
+        heroImg: "linear-gradient(135deg, #8B2500, #CD853F, #2F1B0E)",
+        metacritic: 78, userScore: 7.9, gamespotScore: 7, gamespotVerdict: "Ambitious but uneven",
+        wikiGrowth: "+340%", wikiEditors: 2847, activeDiscussions: 186,
+        fanaticalPrice: "$49.99", fanaticalDiscount: null,
+        fanIntensity: 94, tags: ["Open World", "Action RPG", "PC", "PS5"],
+        trending: true, trendDelta: "+12",
+        hotDiscussion: { title: "Best early-game build paths?", replies: 127, hot: true },
+        newsHeadline: "Pearl Abyss responds to AI art controversy",
+        progressTracking: false,
+        crossAffinity: ["Elden Ring", "Black Desert", "The Witcher 3"],
+      },
+      {
+        id: 2, title: "Starfield", type: "game", studio: "Bethesda",
+        heroImg: "linear-gradient(135deg, #0A1628, #1A3A5C, #4A7AB5)",
+        metacritic: 83, userScore: 6.8, gamespotScore: 7, gamespotVerdict: "A universe worth revisiting",
+        wikiGrowth: "+89%", wikiEditors: 12400, activeDiscussions: 342,
+        fanaticalPrice: "$59.99", fanaticalDiscount: "-25%",
+        fanIntensity: 87, tags: ["RPG", "Sci-Fi", "PS5 NEW", "Xbox", "PC"],
+        trending: true, trendDelta: "+8",
+        hotDiscussion: { title: "PS5 performance vs PC — early impressions", replies: 243, hot: true },
+        newsHeadline: "Starfield PS5 launches April 7 — first cross-platform Bethesda RPG",
+        progressTracking: true, progressPct: 34,
+        crossAffinity: ["No Man's Sky", "Mass Effect", "Fallout 4"],
+      },
+      {
+        id: 3, title: "Avengers: Doomsday", type: "movie", studio: "Marvel Studios",
+        heroImg: "linear-gradient(135deg, #1B0A3C, #4A1A8A, #E8175D)",
+        metacritic: null, userScore: null, gamespotScore: null, gamespotVerdict: null,
+        wikiGrowth: "+560%", wikiEditors: 8920, activeDiscussions: 1247,
+        fanaticalPrice: null, fanaticalDiscount: null,
+        fanIntensity: 98, tags: ["MCU", "Dec 2025", "Robert Downey Jr"],
+        trending: true, trendDelta: "+23",
+        hotDiscussion: { title: "Who's actually under the Doom mask?", replies: 892, hot: true },
+        newsHeadline: "DUNESDAY: Dune 3 vs Avengers — same release date showdown",
+        progressTracking: false,
+        crossAffinity: ["Spider-Man", "X-Men", "Doctor Strange"],
+      },
+      {
+        id: 4, title: "GTA VI", type: "game", studio: "Rockstar Games",
+        heroImg: "linear-gradient(135deg, #0D0D0D, #1A4731, #40E0D0)",
+        metacritic: null, userScore: null, gamespotScore: null, gamespotVerdict: null,
+        wikiGrowth: "+1200%", wikiEditors: 34000, activeDiscussions: 4521,
+        fanaticalPrice: null, fanaticalDiscount: null,
+        fanIntensity: 99, tags: ["Open World", "Action", "Fall 2025"],
+        trending: true, trendDelta: "+2",
+        hotDiscussion: { title: "Vice City map analysis from trailer 2", replies: 3401, hot: true },
+        newsHeadline: "Rockstar confirms Fall 2025 release window",
+        progressTracking: false,
+        crossAffinity: ["Red Dead Redemption 2", "Saints Row", "Cyberpunk 2077"],
+      },
+      {
+        id: 5, title: "Marvel's Wolverine", type: "game", studio: "Insomniac Games",
+        heroImg: "linear-gradient(135deg, #2B1100, #8B7500, #FFD700)",
+        metacritic: null, userScore: null, gamespotScore: null, gamespotVerdict: null,
+        wikiGrowth: "+145%", wikiEditors: 5600, activeDiscussions: 423,
+        fanaticalPrice: null, fanaticalDiscount: null,
+        fanIntensity: 82, tags: ["Action", "PS5 Exclusive", "Mature", "Fall 2025"],
+        trending: true, trendDelta: "+5",
+        hotDiscussion: { title: "Leaked gameplay shows brutal combat system", replies: 567, hot: true },
+        newsHeadline: "PlayStation confirms Oct 2025 launch — Fandom community takeover incoming",
+        progressTracking: false,
+        crossAffinity: ["Spider-Man 2", "God of War", "X-Men"],
+      },
+    ];
+
+    const USER_COLLECTIONS = [
+      { name: "Playing Now", count: 3, icon: "🎮" },
+      { name: "Watching", count: 7, icon: "📺" },
+      { name: "Wishlist", count: 12, icon: "⭐" },
+    ];
+
+    const USER_PROGRESS = [
+      { title: "Elden Ring", pct: 67, lastPlayed: "2 days ago", img: "linear-gradient(135deg, #2B2B00, #8B7500, #FFD700)" },
+      { title: "Starfield", pct: 34, lastPlayed: "Today", img: "linear-gradient(135deg, #0A1628, #1A3A5C, #4A7AB5)" },
+      { title: "Animal Crossing: NH", pct: 89, lastPlayed: "5 hrs ago", img: "linear-gradient(135deg, #55AA55, #88CC88, #AADDAA)" },
+    ];
+
+    const DUNESDAY_DATA = {
+      avengers: { wikiTraffic: 2340000, weeklyGrowth: "+23%", edits: 12400, discussions: 8900 },
+      dune: { wikiTraffic: 890000, weeklyGrowth: "+45%", edits: 3200, discussions: 2100 },
+      prediction: "Avengers leads 72% to 28% based on current fan signals",
+      weekNum: 38,
+    };
+
+    // ── Helper components ──
+    function MetacriticBadge({ score, size = "md" }) {
+      if (!score) return null;
+      const bg = score >= 75 ? COLORS.metacriticGreen : score >= 50 ? COLORS.metacriticYellow : COLORS.metacriticRed;
+      const sz = size === "lg" ? { w: "48px", h: "48px", fs: "20px" } : size === "sm" ? { w: "28px", h: "28px", fs: "11px" } : { w: "36px", h: "36px", fs: "15px" };
+      return (
+        <div style={{ width: sz.w, height: sz.h, borderRadius: "6px", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: sz.fs, color: "#fff", flexShrink: 0 }}>
+          {score}
+        </div>
+      );
+    }
+
+    function FanaticalButton({ price, discount }) {
+      if (!price) return null;
+      return (
+        <button style={{ background: `linear-gradient(135deg, ${COLORS.fanaticalOrange}, #FF8C00)`, border: "none", borderRadius: "8px", padding: "8px 16px", color: "#fff", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+          <span>🛒</span>
+          {discount && <span style={{ textDecoration: "line-through", opacity: 0.7, fontSize: "11px" }}>{price}</span>}
+          <span>{discount ? `${price.replace("$", "$")}` : price}</span>
+          {discount && <span style={{ background: "#fff3", borderRadius: "4px", padding: "1px 5px", fontSize: "10px" }}>{discount}</span>}
+        </button>
+      );
+    }
+
+    function GameSpotBadge({ score }) {
+      if (!score) return null;
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: COLORS.gamespotRed }} />
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>{score}/10</span>
+          <span style={{ fontSize: "10px", color: "#aaa" }}>GameSpot</span>
+        </div>
+      );
+    }
+
+    function FanIntensityBar({ value }) {
+      const color = value >= 90 ? COLORS.fandomMagenta : value >= 70 ? COLORS.fandomTeal : COLORS.fandomYellow;
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+          <span style={{ fontSize: "14px" }}>🔥</span>
+          <div style={{ flex: 1, height: "4px", borderRadius: "2px", background: "#333" }}>
+            <div style={{ width: `${value}%`, height: "100%", borderRadius: "2px", background: `linear-gradient(90deg, ${color}88, ${color})`, transition: "width 1s ease" }} />
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 700, color }}>{value}</span>
+        </div>
+      );
+    }
+
+    function Tag({ label, highlight }) {
+      return (
+        <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "10px", background: highlight ? COLORS.fandomMagenta + "33" : "#333", color: highlight ? COLORS.fandomMagenta : "#aaa", fontWeight: 600, border: highlight ? `1px solid ${COLORS.fandomMagenta}55` : "1px solid #444" }}>
+          {label}
+        </span>
+      );
+    }
+
+    // ── Screen: Home Feed ──
+    function HomeScreen({ onSelectTitle, onNav }) {
+      const [greeting] = useState(() => {
+        const h = new Date().getHours();
+        return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+      });
+
+      return (
+        <div style={{ paddingBottom: "80px" }}>
+          {/* Header */}
+          <div style={{ padding: "16px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "24px" }}>❤️</span>
+              <span style={{ fontSize: "22px", fontWeight: 800, color: "#fff", letterSpacing: "-0.5px" }}>Fandom</span>
+            </div>
+            <div style={{ display: "flex", gap: "16px" }}>
+              <span style={{ fontSize: "20px", cursor: "pointer" }}>🔍</span>
+              <div style={{ position: "relative" }}>
+                <span style={{ fontSize: "20px", cursor: "pointer" }}>🔔</span>
+                <div style={{ position: "absolute", top: "-2px", right: "-4px", width: "8px", height: "8px", borderRadius: "50%", background: COLORS.fandomMagenta }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Greeting */}
+          <div style={{ padding: "8px 20px 16px" }}>
+            <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>{greeting}, Jay</p>
+            <p style={{ color: "#fff", fontSize: "13px", margin: "4px 0 0", opacity: 0.6 }}>3 games tracked · 7 shows watching</p>
+          </div>
+
+          {/* Dunesday Prediction Card — H3 showcase */}
+          <div style={{ margin: "0 16px 20px", padding: "16px", borderRadius: "16px", background: "linear-gradient(135deg, #1B0A3C, #0A1628)", border: "1px solid #4A1A8A44" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+              <span style={{ fontSize: "16px" }}>✨</span>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: COLORS.fandomYellow, textTransform: "uppercase", letterSpacing: "1px" }}>Fandom Predicts</span>
+              <span style={{ fontSize: "10px", color: "#666", marginLeft: "auto" }}>Week {DUNESDAY_DATA.weekNum} of 52</span>
+            </div>
+            <p style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: "0 0 12px" }}>
+              DUNESDAY: Who wins Dec 18? 🍿
+            </p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ flex: 72, background: `linear-gradient(90deg, ${COLORS.fandomMagenta}, ${COLORS.fandomMagenta}88)`, borderRadius: "8px 0 0 8px", padding: "10px 12px", position: "relative" }}>
+                <span style={{ fontSize: "11px", color: "#fff", fontWeight: 700 }}>Avengers: Doomsday</span>
+                <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff", display: "block" }}>72%</span>
+              </div>
+              <div style={{ flex: 28, background: `linear-gradient(90deg, ${COLORS.fandomTeal}88, ${COLORS.fandomTeal})`, borderRadius: "0 8px 8px 0", padding: "10px 12px", textAlign: "right" }}>
+                <span style={{ fontSize: "11px", color: "#fff", fontWeight: 700 }}>Dune: Part 3</span>
+                <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff", display: "block" }}>28%</span>
+              </div>
+            </div>
+            <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>
+              Based on wiki traffic, edit velocity & community discussion volume · Powered by Fandom Data
+            </p>
+          </div>
+
+          {/* Trending Now */}
+          <div style={{ padding: "0 20px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "16px" }}>📈</span>
+              <span style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>Trending Now</span>
+            </div>
+            <span style={{ fontSize: "12px", color: COLORS.fandomTeal, cursor: "pointer" }}>See all</span>
+          </div>
+
+          {/* Horizontal scroll trending cards */}
+          <div style={{ display: "flex", overflowX: "auto", gap: "12px", padding: "8px 20px 16px", scrollbarWidth: "none" }}>
+            {TRENDING_TITLES.map((t) => (
+              <div key={t.id} onClick={() => onSelectTitle(t)} style={{ minWidth: "200px", borderRadius: "14px", overflow: "hidden", background: COLORS.fandomCard, cursor: "pointer", flexShrink: 0, border: "1px solid #333" }}>
+                <div style={{ height: "100px", background: t.heroImg, position: "relative" }}>
+                  <div style={{ position: "absolute", top: "8px", right: "8px", display: "flex", gap: "4px" }}>
+                    {t.metacritic && <MetacriticBadge score={t.metacritic} size="sm" />}
+                  </div>
+                  <div style={{ position: "absolute", bottom: "8px", left: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#000a", borderRadius: "6px", padding: "2px 8px" }}>
+                      <span style={{ fontSize: "10px", color: COLORS.metacriticGreen }}>▲</span>
+                      <span style={{ fontSize: "10px", color: COLORS.metacriticGreen, fontWeight: 700 }}>{t.trendDelta}</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: "10px 12px" }}>
+                  <p style={{ color: "#fff", fontSize: "14px", fontWeight: 700, margin: 0 }}>{t.title}</p>
+                  <p style={{ color: "#888", fontSize: "11px", margin: "2px 0 8px" }}>{t.studio}</p>
+                  <FanIntensityBar value={t.fanIntensity} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Your Progress */}
+          <div style={{ padding: "0 20px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "16px" }}>🏆</span>
+              <span style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>Your Progress</span>
+            </div>
+          </div>
+
+          {USER_PROGRESS.map((p, i) => (
+            <div key={i} style={{ margin: "0 16px 10px", padding: "12px 14px", borderRadius: "12px", background: COLORS.fandomCard, display: "flex", alignItems: "center", gap: "12px", border: "1px solid #333" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "10px", background: p.img, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#fff", fontSize: "14px", fontWeight: 600 }}>{p.title}</span>
+                  <span style={{ color: "#888", fontSize: "11px" }}>{p.lastPlayed}</span>
+                </div>
+                <div style={{ height: "6px", borderRadius: "3px", background: "#333", marginTop: "8px" }}>
+                  <div style={{ width: `${p.pct}%`, height: "100%", borderRadius: "3px", background: `linear-gradient(90deg, ${COLORS.fandomTeal}, ${COLORS.fandomMagenta})`, transition: "width 1s ease" }} />
+                </div>
+                <span style={{ fontSize: "11px", color: "#888", marginTop: "4px", display: "block" }}>{p.pct}% complete</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Collections */}
+          <div style={{ padding: "16px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "16px" }}>🔖</span>
+              <span style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>Collections</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "10px", padding: "0 16px 16px" }}>
+            {USER_COLLECTIONS.map((c, i) => (
+              <div key={i} style={{ flex: 1, padding: "14px 12px", borderRadius: "12px", background: COLORS.fandomCard, textAlign: "center", border: "1px solid #333", cursor: "pointer" }}>
+                <span style={{ fontSize: "24px" }}>{c.icon}</span>
+                <p style={{ color: "#fff", fontSize: "13px", fontWeight: 600, margin: "6px 0 2px" }}>{c.name}</p>
+                <p style={{ color: "#888", fontSize: "11px", margin: 0 }}>{c.count} titles</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Hot Discussions */}
+          <div style={{ padding: "8px 20px", display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <span style={{ fontSize: "16px" }}>💬</span>
+            <span style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>Hot Discussions</span>
+          </div>
+          {TRENDING_TITLES.filter(t => t.hotDiscussion.hot).slice(0, 3).map((t, i) => (
+            <div key={i} onClick={() => onSelectTitle(t)} style={{ margin: "0 16px 10px", padding: "12px 14px", borderRadius: "12px", background: COLORS.fandomCard, cursor: "pointer", border: "1px solid #333" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: "#aaa", fontSize: "11px", margin: "0 0 4px", fontWeight: 600 }}>{t.title}</p>
+                  <p style={{ color: "#fff", fontSize: "13px", fontWeight: 600, margin: "0 0 6px" }}>{t.hotDiscussion.title}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "11px", color: "#888" }}>💬 {t.hotDiscussion.replies} replies</span>
+                    <span style={{ fontSize: "14px" }}>🔥</span>
+                  </div>
+                </div>
+                <div style={{ width: "40px", height: "40px", borderRadius: "8px", background: t.heroImg, flexShrink: 0, marginLeft: "12px" }} />
+              </div>
+            </div>
+          ))}
+
+          {/* GameSpot Editorial */}
+          <div style={{ padding: "16px 20px 8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: COLORS.gamespotRed }} />
+            <span style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>GameSpot</span>
+            <span style={{ fontSize: "11px", color: "#888" }}>Latest</span>
+          </div>
+          {TRENDING_TITLES.filter(t => t.newsHeadline).slice(0, 3).map((t, i) => (
+            <div key={i} style={{ margin: "0 16px 8px", padding: "10px 14px", borderRadius: "10px", background: COLORS.fandomCard, border: "1px solid #333" }}>
+              <p style={{ color: "#fff", fontSize: "13px", margin: 0, fontWeight: 500 }}>{t.newsHeadline}</p>
+              <p style={{ color: "#666", fontSize: "11px", margin: "4px 0 0" }}>{t.title} · 2h ago</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ── Screen: Title Detail Page ──
+    function TitleDetailScreen({ title, onBack }) {
+      const [activeTab, setActiveTab] = useState("overview");
+      const t = title;
+
+      return (
+        <div style={{ paddingBottom: "80px" }}>
+          {/* Hero */}
+          <div style={{ height: "220px", background: t.heroImg, position: "relative" }}>
+            <button onClick={onBack} style={{ position: "absolute", top: "16px", left: "16px", background: "#000a", border: "none", borderRadius: "50%", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "20px" }}>
+              ‹
+            </button>
+            <div style={{ position: "absolute", bottom: "0", left: "0", right: "0", padding: "40px 20px 16px", background: "linear-gradient(transparent, #1A1A2E)" }}>
+              <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+                {t.tags.map((tag, i) => <Tag key={i} label={tag} highlight={tag.includes("NEW") || tag.includes("Exclusive")} />)}
+              </div>
+              <h1 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.5px" }}>{t.title}</h1>
+              <p style={{ color: "#aaa", fontSize: "14px", margin: 0 }}>{t.studio}</p>
+            </div>
+          </div>
+
+          {/* Scores Row — THE integration layer */}
+          <div style={{ padding: "16px 20px", display: "flex", gap: "12px", alignItems: "center", borderBottom: "1px solid #333", overflowX: "auto" }}>
+            {t.metacritic && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <MetacriticBadge score={t.metacritic} size="lg" />
+                <div>
+                  <span style={{ fontSize: "10px", color: "#888", display: "block" }}>Metacritic</span>
+                  <span style={{ fontSize: "12px", color: "#fff" }}>Critics</span>
+                </div>
+              </div>
+            )}
+            {t.userScore && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "12px", borderLeft: "1px solid #333" }}>
+                <div style={{ width: "48px", height: "48px", borderRadius: "50%", border: `3px solid ${COLORS.metacriticGreen}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff" }}>{t.userScore}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: "10px", color: "#888", display: "block" }}>Metacritic</span>
+                  <span style={{ fontSize: "12px", color: "#fff" }}>Users</span>
+                </div>
+              </div>
+            )}
+            {t.gamespotScore && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "12px", borderLeft: "1px solid #333", marginLeft: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: COLORS.gamespotRed }} />
+                    <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff" }}>{t.gamespotScore}/10</span>
+                  </div>
+                  <span style={{ fontSize: "10px", color: "#888" }}>GameSpot</span>
+                </div>
+              </div>
+            )}
+            {!t.metacritic && !t.gamespotScore && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "16px" }}>🕐</span>
+                <span style={{ color: "#888", fontSize: "13px" }}>Reviews pending — releasing {t.tags.find(tg => tg.includes("202")) || "soon"}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Fan Intensity */}
+          <div style={{ padding: "12px 20px", borderBottom: "1px solid #333" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "12px", color: "#888", fontWeight: 600 }}>FAN INTENSITY</span>
+              <span style={{ fontSize: "11px", color: "#666" }}>{t.wikiEditors.toLocaleString()} active fans this week</span>
+            </div>
+            <FanIntensityBar value={t.fanIntensity} />
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ padding: "16px 20px", display: "flex", gap: "10px", borderBottom: "1px solid #333" }}>
+            {t.fanaticalPrice && <FanaticalButton price={t.fanaticalPrice} discount={t.fanaticalDiscount} />}
+            <button style={{ flex: t.fanaticalPrice ? 0 : 1, background: COLORS.fandomMagenta, border: "none", borderRadius: "8px", padding: "8px 16px", color: "#fff", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>🔖</span>
+              {t.progressTracking ? "Continue" : "Track"}
+            </button>
+            <button style={{ background: "transparent", border: `1px solid #555`, borderRadius: "8px", padding: "8px 16px", color: "#fff", fontWeight: 600, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>👥</span>
+              Wiki
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid #333" }}>
+            {["overview", "discuss", "wiki", "news"].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, padding: "12px", background: "none", border: "none", borderBottom: activeTab === tab ? `2px solid ${COLORS.fandomMagenta}` : "2px solid transparent", color: activeTab === tab ? "#fff" : "#888", fontSize: "13px", fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === "overview" && (
+            <div style={{ padding: "16px" }}>
+              {/* GameSpot Review Excerpt */}
+              {t.gamespotVerdict && (
+                <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "14px", border: "1px solid #333" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: COLORS.gamespotRed }} />
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>GameSpot Review</span>
+                    <span style={{ marginLeft: "auto", fontSize: "14px" }}>↗</span>
+                  </div>
+                  <p style={{ color: "#ccc", fontSize: "14px", margin: "0 0 8px", fontStyle: "italic" }}>"{t.gamespotVerdict}"</p>
+                  <span style={{ fontSize: "11px", color: "#888" }}>Read full review →</span>
+                </div>
+              )}
+
+              {/* Progress (if tracking) */}
+              {t.progressTracking && (
+                <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "14px", border: `1px solid ${COLORS.fandomTeal}33` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>Your Progress</span>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: COLORS.fandomTeal }}>{t.progressPct}%</span>
+                  </div>
+                  <div style={{ height: "8px", borderRadius: "4px", background: "#333" }}>
+                    <div style={{ width: `${t.progressPct}%`, height: "100%", borderRadius: "4px", background: `linear-gradient(90deg, ${COLORS.fandomTeal}, ${COLORS.fandomMagenta})` }} />
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                    <button style={{ flex: 1, background: COLORS.fandomTeal + "22", border: `1px solid ${COLORS.fandomTeal}44`, borderRadius: "8px", padding: "8px", color: COLORS.fandomTeal, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+                      📋 Checklist
+                    </button>
+                    <button style={{ flex: 1, background: COLORS.fandomMagenta + "22", border: `1px solid ${COLORS.fandomMagenta}44`, borderRadius: "8px", padding: "8px", color: COLORS.fandomMagenta, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+                      🗺️ Map
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Hot Discussion */}
+              <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "14px", border: "1px solid #333" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "14px" }}>🔥</span>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>Hot Discussion</span>
+                </div>
+                <p style={{ color: "#fff", fontSize: "14px", fontWeight: 600, margin: "0 0 6px" }}>{t.hotDiscussion.title}</p>
+                <span style={{ fontSize: "12px", color: "#888" }}>💬 {t.hotDiscussion.replies} replies · Join the conversation</span>
+              </div>
+
+              {/* Cross-Affinity — the H3 data product */}
+              <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "14px", border: "1px solid #333" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "14px" }}>🎯</span>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>Fans Also Love</span>
+                  <span style={{ fontSize: "9px", color: "#666", marginLeft: "auto", background: "#333", padding: "2px 6px", borderRadius: "4px" }}>Powered by Fandom Data</span>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {t.crossAffinity.map((a, i) => (
+                    <div key={i} style={{ flex: 1, padding: "10px 8px", borderRadius: "8px", background: "#2A2A4A", textAlign: "center" }}>
+                      <span style={{ fontSize: "12px", color: "#ccc", fontWeight: 500 }}>{a}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* News */}
+              {t.newsHeadline && (
+                <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, border: "1px solid #333" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: COLORS.gamespotRed }} />
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>Latest News</span>
+                  </div>
+                  <p style={{ color: "#ccc", fontSize: "13px", margin: 0 }}>{t.newsHeadline}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "discuss" && (
+            <div style={{ padding: "16px" }}>
+              <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "10px", border: "1px solid #333" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: COLORS.fandomMagenta, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: "14px" }}>👤</span>
+                  </div>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>GalacticNomad</span>
+                  <span style={{ fontSize: "11px", color: "#888", marginLeft: "auto" }}>2h ago</span>
+                </div>
+                <p style={{ color: "#ddd", fontSize: "13px", margin: "0 0 10px" }}>Just hit Chapter 3 and the difficulty spike is real. Anyone else struggling with the Thornwood Hollow boss? My strength build feels useless here...</p>
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <span style={{ fontSize: "12px", color: "#888" }}>👍 47</span>
+                  <span style={{ fontSize: "12px", color: "#888" }}>💬 23</span>
+                  <span style={{ fontSize: "12px", color: "#888" }}>🔖 Save</span>
+                </div>
+              </div>
+              <div style={{ padding: "14px", borderRadius: "12px", background: COLORS.fandomCard, marginBottom: "10px", border: "1px solid #333" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: COLORS.fandomTeal, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: "14px" }}>👤</span>
+                  </div>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>WikiSage_42</span>
+                  <span style={{ fontSize: "10px", color: COLORS.fandomYellow, background: COLORS.fandomYellow + "22", padding: "1px 6px", borderRadius: "4px" }}>Wiki Editor</span>
+                  <span style={{ fontSize: "11px", color: "#888", marginLeft: "auto" }}>5h ago</span>
+                </div>
+                <p style={{ color: "#ddd", fontSize: "13px", margin: "0 0 10px" }}>I've been mapping every resource node in the desert biome. Wiki page is up with interactive map coords — check it out if you're farming materials.</p>
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <span style={{ fontSize: "12px", color: "#888" }}>👍 112</span>
+                  <span style={{ fontSize: "12px", color: "#888" }}>💬 34</span>
+                  <span style={{ fontSize: "12px", color: "#888" }}>🔖 Save</span>
+                </div>
+              </div>
+              <button style={{ width: "100%", padding: "14px", borderRadius: "12px", background: COLORS.fandomMagenta + "22", border: `1px solid ${COLORS.fandomMagenta}44`, color: COLORS.fandomMagenta, fontWeight: 700, fontSize: "14px", cursor: "pointer" }}>
+                + Start a Discussion
+              </button>
+            </div>
+          )}
+
+          {activeTab === "wiki" && (
+            <div style={{ padding: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 14px", borderRadius: "10px", background: COLORS.fandomCard, marginBottom: "10px", border: "1px solid #333" }}>
+                <span style={{ fontSize: "16px" }}>📖</span>
+                <span style={{ color: "#fff", fontSize: "14px", fontWeight: 600 }}>{t.wikiEditors.toLocaleString()} active editors</span>
+                <span style={{ color: COLORS.metacriticGreen, fontSize: "12px", marginLeft: "auto" }}>{t.wikiGrowth} this week</span>
+              </div>
+              {["Characters", "Locations", "Quests & Missions", "Items & Equipment", "Lore & Story", "Builds & Guides"].map((section, i) => (
+                <div key={i} style={{ padding: "14px", borderRadius: "10px", background: COLORS.fandomCard, marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", border: "1px solid #333" }}>
+                  <span style={{ color: "#fff", fontSize: "14px" }}>{section}</span>
+                  <span style={{ fontSize: "14px" }}>›</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === "news" && (
+            <div style={{ padding: "16px" }}>
+              {[t.newsHeadline, `${t.title} breaks Day 1 concurrent player records`, `Community reacts to ${t.title} ending — spoiler discussion thread`, `${t.studio} CEO talks post-launch roadmap`].map((headline, i) => (
+                <div key={i} style={{ padding: "14px", borderRadius: "10px", background: COLORS.fandomCard, marginBottom: "10px", border: "1px solid #333" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: i < 2 ? COLORS.gamespotRed : COLORS.fandomMagenta }} />
+                    <span style={{ fontSize: "10px", color: "#888" }}>{i < 2 ? "GameSpot" : "Fandom Community"}</span>
+                    <span style={{ fontSize: "10px", color: "#666", marginLeft: "auto" }}>{i === 0 ? "2h" : i === 1 ? "6h" : i === 2 ? "1d" : "2d"} ago</span>
+                  </div>
+                  <p style={{ color: "#fff", fontSize: "14px", fontWeight: 500, margin: 0 }}>{headline}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Main App ──
+    function FanCompanion() {
+      const [screen, setScreen] = useState("home");
+      const [selectedTitle, setSelectedTitle] = useState(null);
+      const [activeNavTab, setActiveNavTab] = useState("home");
+
+      const handleSelectTitle = (title) => {
+        setSelectedTitle(title);
+        setScreen("detail");
+      };
+
+      const handleBack = () => {
+        setScreen("home");
+        setSelectedTitle(null);
+      };
+
+      return (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", minHeight: "100vh", background: "#0A0A1A", padding: "20px 0" }}>
+          {/* Phone Frame */}
+          <div style={{ width: "390px", minHeight: "844px", background: COLORS.fandomDark, borderRadius: "40px", overflow: "hidden", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.5)", border: "4px solid #333" }}>
+            {/* Status bar */}
+            <div style={{ padding: "12px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "#fff", fontSize: "14px", fontWeight: 600 }}>9:41</span>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <div style={{ width: "16px", height: "10px", borderRadius: "2px", border: "1px solid #fff", position: "relative" }}>
+                  <div style={{ position: "absolute", top: "1px", left: "1px", right: "1px", bottom: "1px", borderRadius: "1px", background: COLORS.metacriticGreen }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Screen Content */}
+            <div style={{ height: "800px", overflow: "auto", scrollbarWidth: "none" }}>
+              {screen === "home" && <HomeScreen onSelectTitle={handleSelectTitle} onNav={setActiveNavTab} />}
+              {screen === "detail" && selectedTitle && <TitleDetailScreen title={selectedTitle} onBack={handleBack} />}
+            </div>
+
+            {/* Bottom Nav */}
+            <div style={{ position: "absolute", bottom: "0", left: "0", right: "0", background: "#111125", borderTop: "1px solid #333", display: "flex", padding: "8px 0 28px" }}>
+              {[
+                { id: "home", icon: "🏠", label: "Home" },
+                { id: "saved", icon: "🔖", label: "Saved" },
+                { id: "explore", icon: "🔍", label: "Explore" },
+                { id: "discuss", icon: "💬", label: "Discuss" },
+                { id: "profile", icon: "👤", label: "Profile" },
+              ].map((tab) => (
+                <button key={tab.id} onClick={() => { setActiveNavTab(tab.id); if (tab.id === "home") handleBack(); }} style={{ flex: 1, background: "none", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", cursor: "pointer" }}>
+                  <span style={{ fontSize: "20px" }}>{tab.icon}</span>
+                  <span style={{ fontSize: "10px", color: (screen === "home" && tab.id === "home") || activeNavTab === tab.id ? COLORS.fandomMagenta : "#555" }}>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Annotation Panel */}
+          <div style={{ width: "320px", marginLeft: "24px", padding: "20px", color: "#ccc", fontSize: "13px", lineHeight: "1.6" }}>
+            <h2 style={{ color: COLORS.fandomMagenta, fontSize: "18px", fontWeight: 800, margin: "0 0 4px" }}>Fan Companion</h2>
+            <p style={{ color: "#888", fontSize: "12px", margin: "0 0 20px" }}>Interactive prototype · {screen === "home" ? "Home Feed" : selectedTitle?.title}</p>
+
+            {screen === "home" ? (
+              <>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fandomYellow, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>🔥 DUNESDAY PREDICTION (H3)</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>The "Fandom Predicts" card is the H3 data product in consumer form. It shows wiki traffic + community signals being used to predict cultural outcomes — the same data studios would pay for in the Fandom OS dashboard.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fandomTeal, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>📊 FAN INTENSITY INDEX</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>Each title shows a "Fan Intensity" score derived from wiki edits, discussion volume, and contributor activity. This is the community signal data pipeline made visible.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.metacriticGreen, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>⭐ METACRITIC INTEGRATION</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>Scores appear natively on every card — not a link out, but embedded authority. This is Metacritic earning its keep in the portfolio.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.gamespotRed, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>📰 GAMESPOT EDITORIAL</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>News feed at the bottom surfaces GameSpot articles in the companion — the professional voice alongside the community voice.</p>
+                </div>
+                <div>
+                  <h3 style={{ color: "#fff", fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>👆 TAP ANY TITLE</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>Tap a trending card or discussion to see the title detail page — where all properties converge.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fandomMagenta, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>🎯 THE INTEGRATION PAGE</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>This single page is where the portfolio thesis becomes product. Metacritic scores + GameSpot review + community discussion + wiki + Fanatical purchase — all for one title, in one experience.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fanaticalOrange, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>🛒 FANATICAL COMMERCE</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>The "Buy" button connects to Fanatical — turning fan intent into transaction. This is the bridge from engagement to commerce that the strategy describes.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fandomTeal, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>🗺️ PROGRESS TRACKING</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>Checklist + Map utilities (like Animal Crossing companion) make this a daily-use tool, not a reference lookup. This is what converts visitors to MARU.</p>
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ color: COLORS.fandomYellow, fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>🔗 CROSS-AFFINITY (H3)</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>"Fans Also Love" is powered by Fandom's cross-title data — the Fan Intent API concept. Studios would pay for this affinity data; fans get it as a discovery feature.</p>
+                </div>
+                <div>
+                  <h3 style={{ color: "#fff", fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>📑 TABS: DISCUSS · WIKI · NEWS</h3>
+                  <p style={{ margin: 0, fontSize: "12px" }}>Each tab represents a different Fandom capability — community (Discuss), wiki content (Wiki), editorial (News/GameSpot). Together they make the Fan Companion a daily habit.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<FanCompanion />);
+  </script>
+</body>
+</html>
