@@ -458,7 +458,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style>
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>
-<script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js'></script>
 </head>
 <body>
 <div id="app">
@@ -2147,22 +2147,33 @@ async function handleBulkPhotos(files){
     const dataUrl=await readFileAsDataUrl(file);
     let lat=null,lng=null,dateStr=null;
 
-    // Extract EXIF
+    // Extract EXIF — use dedicated functions from exifr lite build
     try{
-      const exif=await exifr.parse(file,{gps:true,tiff:true,ifd0:true});
-      if(exif){
-        if(exif.latitude&&exif.longitude){lat=exif.latitude;lng=exif.longitude;}
-        if(exif.DateTimeOriginal){
-          const d=exif.DateTimeOriginal;
-          dateStr=d instanceof Date
-            ?d.toISOString().split('T')[0]
-            :typeof d==='string'?d.substring(0,10).replace(/:/g,'-'):null;
-        }
-        if(!dateStr&&exif.DateTime){
-          dateStr=typeof exif.DateTime==='string'?exif.DateTime.substring(0,10).replace(/:/g,'-'):null;
-        }
+      // GPS: exifr.gps() is the correct API for the lite build
+      const gps = await exifr.gps(file);
+      if(gps && gps.latitude && gps.longitude){
+        lat = gps.latitude;
+        lng = gps.longitude;
+        console.log('GPS found:', lat, lng);
       }
-    }catch(ex){console.log('EXIF error:',ex.message);}
+    }catch(gpsErr){console.log('GPS error:',gpsErr.message);}
+
+    try{
+      // Date: parse full EXIF for date fields
+      const exif = await exifr.parse(file, {tiff:true, exif:true, gps:true, ifd0:true});
+      if(exif){
+        const rawDate = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime;
+        if(rawDate){
+          if(rawDate instanceof Date){
+            dateStr = rawDate.toISOString().split('T')[0];
+          } else if(typeof rawDate === 'string'){
+            // EXIF date format: "2023:10:14 09:15:00" → "2023-10-14"
+            dateStr = rawDate.substring(0,10).replace(/:/g,'-');
+          }
+        }
+        console.log('Date found:', dateStr);
+      }
+    }catch(dateErr){console.log('Date error:',dateErr.message);}
 
     // Fallback: use today's date if no EXIF date
     if(!dateStr) dateStr=new Date().toISOString().split('T')[0];
