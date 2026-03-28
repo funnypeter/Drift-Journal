@@ -458,6 +458,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style>
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js'></script>
 </head>
 <body>
 <div id="app">
@@ -500,6 +501,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     </div>
   </div>
   <div class="or-divider"><span>search or type any location</span></div>
+  <div style="text-align:center;margin:2px 0">
+    <button onclick="openBulkImport()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;gap:4px;padding:4px 8px;opacity:.75">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import old trips from photos
+    </button>
+  </div>
   <div class="search-card">
     <div class="search-input-row">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -513,6 +520,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     <button class="loc-selected-clear" onclick="clearLocation()">×</button>
   </div>
   <button class="loc-continue-btn" id="locContinueBtn" onclick="continueToLog()">Continue to Log Entry →</button>
+
 </div>
 
 <!-- LOG FORM -->
@@ -597,6 +605,57 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   </div>
   <div style="padding:16px 16px 8px;font-family:var(--serif);font-size:1.3rem;font-weight:700">All Trips</div>
   <div id="mapTripList"></div>
+</div>
+
+<!-- BULK IMPORT MODAL -->
+<div id="bulkImportModal" style="display:none;position:fixed;inset:0;z-index:800;background:var(--bg);flex-direction:column;overflow:hidden">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid rgba(0,0,0,.08);background:var(--bg);position:sticky;top:0;z-index:10">
+    <button onclick="closeBulkImport()" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div style="font-family:var(--serif);font-size:1.2rem;font-weight:700;flex:1">Import Past Trips</div>
+    <div id="bulkImportCount" style="font-size:12px;color:var(--muted)"></div>
+  </div>
+
+  <!-- Steps -->
+  <div id="bulkStep1" style="flex:1;overflow-y:auto;padding:24px 16px">
+    <div style="text-align:center;padding:20px 0 32px">
+      <div style="width:72px;height:72px;background:var(--teal-light);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      </div>
+      <div style="font-family:var(--serif);font-size:1.4rem;font-weight:700;margin-bottom:8px">Select Your Fish Photos</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:280px;margin:0 auto 28px">
+        Pick photos of your catches. The app will read GPS and date info to automatically create trip entries.
+      </div>
+      <label style="display:inline-flex;align-items:center;gap:8px;background:var(--teal);color:white;border-radius:10px;padding:14px 28px;cursor:pointer;font-size:14px;font-weight:700;font-family:var(--sans)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Choose Photos
+        <input id="bulkPhotoInput" type="file" accept="image/*" multiple style="display:none" onchange="handleBulkPhotos(this.files)">
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:12px">Works best with photos taken with location services on</div>
+    </div>
+  </div>
+
+  <!-- Processing step -->
+  <div id="bulkStep2" style="display:none;flex:1;overflow-y:auto;padding:16px">
+    <div id="bulkProgress" style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600" id="bulkProgressLabel">Processing photos...</div>
+        <div style="font-size:12px;color:var(--muted);margin-left:auto" id="bulkProgressNum">0 / 0</div>
+      </div>
+      <div style="height:4px;background:rgba(0,0,0,.08);border-radius:2px;overflow:hidden">
+        <div id="bulkProgressBar" style="height:100%;background:var(--teal);width:0%;transition:width .3s;border-radius:2px"></div>
+      </div>
+    </div>
+    <div id="bulkTripPreviews" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div id="bulkSaveRow" style="display:none;padding:16px 0 8px">
+      <button onclick="saveBulkTrips()" style="width:100%;background:var(--teal);color:white;border:none;border-radius:10px;height:52px;font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span id="bulkSaveLabel">Save All Trips</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- ENTRY MINI MAP MODAL -->
@@ -2046,6 +2105,240 @@ renderFeed();renderMap();
 document.getElementById('statTrips').textContent=trips.length;
 document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
 </script>
+<script>
+// ══ BULK PHOTO IMPORT ══════════════════════════════════════════════════════
+let _bulkTrips = []; // grouped trip data before saving
+
+function openBulkImport(){
+  document.getElementById('bulkImportModal').style.display='flex';
+  document.body.style.overflow='hidden';
+  // Reset to step 1
+  document.getElementById('bulkStep1').style.display='block';
+  document.getElementById('bulkStep2').style.display='none';
+  document.getElementById('bulkSaveRow').style.display='none';
+  document.getElementById('bulkTripPreviews').innerHTML='';
+  document.getElementById('bulkImportCount').textContent='';
+  _bulkTrips=[];
+}
+
+function closeBulkImport(){
+  document.getElementById('bulkImportModal').style.display='none';
+  document.body.style.overflow='';
+}
+
+async function handleBulkPhotos(files){
+  if(!files||!files.length) return;
+  document.getElementById('bulkStep1').style.display='none';
+  document.getElementById('bulkStep2').style.display='block';
+
+  const total=files.length;
+  document.getElementById('bulkProgressNum').textContent='0 / '+total;
+  document.getElementById('bulkImportCount').textContent=total+' photos';
+
+  // ── Process each photo ────────────────────────────────────────────────────
+  const photoData=[]; // {file, dataUrl, lat, lng, date, dateStr, locationKey}
+
+  for(let i=0;i<total;i++){
+    const file=files[i];
+    document.getElementById('bulkProgressLabel').textContent='Reading photo '+(i+1)+' of '+total+'...';
+    document.getElementById('bulkProgressBar').style.width=((i/total)*60)+'%';
+    document.getElementById('bulkProgressNum').textContent=(i+1)+' / '+total;
+
+    const dataUrl=await readFileAsDataUrl(file);
+    let lat=null,lng=null,dateStr=null;
+
+    // Extract EXIF
+    try{
+      const exif=await exifr.parse(file,{gps:true,tiff:true,ifd0:true});
+      if(exif){
+        if(exif.latitude&&exif.longitude){lat=exif.latitude;lng=exif.longitude;}
+        if(exif.DateTimeOriginal){
+          const d=exif.DateTimeOriginal;
+          dateStr=d instanceof Date
+            ?d.toISOString().split('T')[0]
+            :typeof d==='string'?d.substring(0,10).replace(/:/g,'-'):null;
+        }
+        if(!dateStr&&exif.DateTime){
+          dateStr=typeof exif.DateTime==='string'?exif.DateTime.substring(0,10).replace(/:/g,'-'):null;
+        }
+      }
+    }catch(ex){console.log('EXIF error:',ex.message);}
+
+    // Fallback: use today's date if no EXIF date
+    if(!dateStr) dateStr=new Date().toISOString().split('T')[0];
+
+    photoData.push({file,dataUrl,lat,lng,date:dateStr});
+  }
+
+  // ── Group by date + location (round coords to ~5km grid) ─────────────────
+  document.getElementById('bulkProgressLabel').textContent='Grouping by location & date...';
+  const groups={};
+  for(const p of photoData){
+    const latKey=p.lat?Math.round(p.lat*20)/20:'noloc'; // ~5km grid
+    const lngKey=p.lng?Math.round(p.lng*20)/20:'noloc';
+    const key=p.date+'|'+latKey+'|'+lngKey;
+    if(!groups[key]) groups[key]={date:p.date,lat:p.lat,lng:p.lng,photos:[]};
+    groups[key].photos.push(p);
+  }
+
+  // ── Reverse geocode each group location ───────────────────────────────────
+  const groupList=Object.values(groups);
+  for(let i=0;i<groupList.length;i++){
+    const g=groupList[i];
+    document.getElementById('bulkProgressLabel').textContent='Looking up locations... ('+(i+1)+'/'+groupList.length+')';
+    document.getElementById('bulkProgressBar').style.width=(60+((i/groupList.length)*25))+'%';
+    if(g.lat&&g.lng){
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${g.lat}&lon=${g.lng}&format=json`,
+          {headers:{'User-Agent':'DriftJournal/1.0'}});
+        const d=await r.json();
+        const addr=d.address||{};
+        // Try to get a waterway name, fallback to county/state
+        g.locationName=d.name||(addr.river||addr.stream||addr.lake||addr.water||addr.county||'Unknown Location');
+        g.locationFull=(g.locationName+(addr.state?', '+addr.state:''));
+        g.state=addr.state||'';
+      }catch(e){
+        g.locationName='Unknown Location';g.locationFull='Unknown Location';g.state='';
+      }
+    } else {
+      g.locationName='No GPS Data';g.locationFull='No GPS Data — location unknown';g.state='';
+    }
+  }
+
+  // ── AI identify fish in each photo ────────────────────────────────────────
+  document.getElementById('bulkProgressLabel').textContent='Identifying fish with AI...';
+  for(let i=0;i<groupList.length;i++){
+    const g=groupList[i];
+    for(let j=0;j<g.photos.length;j++){
+      const p=g.photos[j];
+      document.getElementById('bulkProgressBar').style.width=(85+((i*g.photos.length+j)/(photoData.length))*15)+'%';
+      try{
+        const base64=p.dataUrl.split(',')[1];
+        const mtype=p.dataUrl.split(';')[0].split(':')[1]||'image/jpeg';
+        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({
+            model:'claude-haiku-4-5-20251001',max_tokens:120,
+            messages:[{role:'user',content:[
+              {type:'image',source:{type:'base64',media_type:mtype,data:base64}},
+              {type:'text',text:'Is there a fish in this photo? Reply ONLY with JSON: {"hasFish":true,"species":"Rainbow Trout","length":"16","confidence":85} or {"hasFish":false}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'}
+            ]}]
+          })
+        });
+        if(resp.ok){
+          const rd=await resp.json();
+          const txt=rd.content?.[0]?.text||'{}';
+          const parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());
+          p.aiResult=parsed;
+        }
+      }catch(e){p.aiResult={hasFish:false};}
+    }
+  }
+
+  document.getElementById('bulkProgressBar').style.width='100%';
+  document.getElementById('bulkProgressLabel').textContent='Done! Review your trips below.';
+
+  // ── Build trip previews ───────────────────────────────────────────────────
+  _bulkTrips=groupList;
+  const previewsEl=document.getElementById('bulkTripPreviews');
+  previewsEl.innerHTML='';
+
+  if(!groupList.length){
+    previewsEl.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No photos could be processed.</div>';
+    return;
+  }
+
+  groupList.forEach((g,gi)=>{
+    const fishPhotos=g.photos.filter(p=>p.aiResult?.hasFish!==false);
+    const dateObj=new Date(g.date+'T12:00:00');
+    const displayDate=dateObj.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    const previewImgs=g.photos.slice(0,3).map(p=>`<img src="${p.dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0"/>`).join('');
+
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,.06)';
+    card.innerHTML=`
+      <div style="padding:14px">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:3px">${displayDate}</div>
+            <div style="font-family:var(--serif);font-size:1rem;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.locationName}</div>
+            <div style="font-size:11px;color:var(--muted)">${g.locationFull}</div>
+          </div>
+          <div style="background:var(--teal-light);color:var(--teal);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0">
+            ${fishPhotos.length} catch${fishPhotos.length!==1?'es':''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:12px;overflow-x:auto">
+          ${g.photos.map((p,pi)=>`
+            <div style="position:relative;flex-shrink:0">
+              <img src="${p.dataUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"/>
+              ${p.aiResult?.hasFish?`<div style="position:absolute;bottom:2px;left:2px;right:2px;background:rgba(30,77,67,.85);color:white;font-size:8px;font-weight:700;text-align:center;border-radius:4px;padding:1px 2px">${p.aiResult.species?.split(' ').pop()||'Fish'}</div>`:''}
+            </div>
+          `).join('')}
+        </div>
+        ${g.lat?`<div style="font-size:10px;color:var(--muted);margin-top:8px">📍 ${g.lat.toFixed(4)}°N ${Math.abs(g.lng).toFixed(4)}°W</div>`:`<div style="margin-top:10px"><div style="font-size:10px;color:var(--muted);margin-bottom:4px">📍 No GPS — where was this trip?</div><input data-group-idx="${gi}" placeholder="e.g. Madison River, Montana" style="width:100%;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:7px 10px;font-size:12px;font-family:var(--sans);background:var(--bg);color:var(--ink);outline:none;box-sizing:border-box" oninput="_bulkTrips[${gi}].locationFull=this.value;_bulkTrips[${gi}].locationName=this.value.split(',')[0].trim()||'Unknown Location'"/></div>`}
+      </div>`;
+    previewsEl.appendChild(card);
+  });
+
+  const totalCatches=groupList.reduce((s,g)=>s+g.photos.filter(p=>p.aiResult?.hasFish!==false).length,0);
+  document.getElementById('bulkSaveLabel').textContent=`Save ${groupList.length} Trip${groupList.length!==1?'s':''} (${totalCatches} catches)`;
+  document.getElementById('bulkSaveRow').style.display='block';
+}
+
+function readFileAsDataUrl(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function saveBulkTrips(){
+  if(!_bulkTrips.length) return;
+  const btn=document.querySelector('#bulkSaveRow button');
+  if(btn){btn.disabled=true;btn.style.opacity='.6';}
+
+  for(const g of _bulkTrips){
+    const fishPhotos=g.photos.filter(p=>p.aiResult?.hasFish!==false);
+    const catches_list=fishPhotos.map(p=>({
+      species:p.aiResult?.species||'Unknown',
+      fly:'—',size:'16',
+      length:p.aiResult?.length||'—',
+      time:'—',notes:'',
+      photo:p.dataUrl
+    }));
+    const allPhotos=g.photos.map(p=>p.dataUrl);
+    const dateObj=new Date(g.date+'T12:00:00');
+    const displayDate=dateObj.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    const newTrip={
+      id:Date.now()+Math.random(),
+      title:g.locationName+' Trip',
+      date:g.date,displayDate,
+      location:g.locationFull,state:g.state||'',
+      lat:g.lat,lng:g.lng,
+      flow:'',water:'',air:'',baro:'',weather:'',moon:'🌔',
+      notes:'Imported from photos.',
+      catches_list,photos:allPhotos,
+      bgColor:BG[trips.length%BG.length]
+    };
+    trips.push(newTrip);
+    // Small delay to ensure unique IDs
+    await new Promise(r=>setTimeout(r,10));
+  }
+
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  document.getElementById('statTrips').textContent=trips.length;
+  document.getElementById('statCatches').textContent=trips.reduce((s,t)=>s+t.catches_list.length,0);
+  renderFeed();
+  closeBulkImport();
+  showToast(_bulkTrips.length+' trips imported!');
+  switchTab('vHome','btn-home');
+}
+</script>
+
 <script>
 // Register service worker for PWA offline support
 if('serviceWorker' in navigator){
