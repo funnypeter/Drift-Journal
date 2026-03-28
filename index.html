@@ -1160,7 +1160,7 @@ function handleSearchDebounced(val){
 async function nominatimSearch(val){
   if(!val||!val.trim()) return;
   const spinner=document.getElementById('locSearchSpinner');
-  spinner.style.display='block';
+  if(spinner) if(spinner) spinner.style.display='block';
   const res=document.getElementById('searchResults');
   res.innerHTML='';
 
@@ -1196,7 +1196,7 @@ async function nominatimSearch(val){
     showSearchResults([], val, false);
     console.log('Nominatim search error:', e.message);
   }
-  spinner.style.display='none';
+  if(spinner) spinner.style.display='none';
 }
 
 function showSearchResults(scored, val, loading){
