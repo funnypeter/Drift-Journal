@@ -2371,10 +2371,16 @@ async function handleBulkPhotos(files){
 
     const dataUrl=await readFileAsDataUrl(file);
 
-    // Try to extract date from filename (e.g. 20231014_145244.jpg -> 2023-10-14)
+    // Extract date from filename - handles IMG_20231014, PXL_20231014, 20231014, etc.
     let dateStr=new Date().toISOString().split('T')[0];
-    const m=file.name.match(/(\d{4})(\d{2})(\d{2})/);
-    if(m) dateStr=m[1]+'-'+m[2]+'-'+m[3];
+    // Match 8-digit date block like 20231014 (year 2000-2099, valid month 01-12, valid day 01-31)
+    const dm=file.name.match(/20(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
+    if(dm) dateStr='20'+dm[1]+'-'+dm[2]+'-'+dm[3];
+    // Also try file.lastModified as fallback
+    else if(file.lastModified){
+      const fd=new Date(file.lastModified);
+      dateStr=fd.getFullYear()+'-'+String(fd.getMonth()+1).padStart(2,'0')+'-'+String(fd.getDate()).padStart(2,'0');
+    }
 
     const key=dateStr;
     if(!groups[key]) groups[key]={date:dateStr,photos:[],catches:[],lat:null,lng:null,location:'',state:''};
