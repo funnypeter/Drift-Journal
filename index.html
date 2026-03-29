@@ -731,24 +731,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   <div class="profile-section">
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:10px">Maps &amp; AI</div>
 
-    <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:3px">🤖 Anthropic API Key</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Enables AI fish ID. Get a free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--teal)">console.anthropic.com</a></div>
-      <div style="display:flex;gap:8px">
-        <input id="apiKeyInput" type="text" placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"
-          onpaste="setTimeout(saveApiKey,50)" onchange="saveApiKey()"/>
-        <button onclick="saveApiKey()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
-      </div>
-      <div id="apiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
-    </div>
+
     <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600;margin-bottom:3px">🔮 Gemini API Key</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Better fish sizing via vision. Free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--teal)">aistudio.google.com</a></div>
       <div style="display:flex;gap:8px">
-        <input id="geminiKeyInput" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"
-          onpaste="setTimeout(saveGeminiKey,100)"/>
+        <input id="geminiKeyInput" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"/>
         <button onclick="saveGeminiKey()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:60px">Save</button>
       </div>
       <div id="geminiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
@@ -1175,15 +1163,11 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
       :'Identify this fish and estimate its length in inches from mouth to tail. Use visible references (hands, net, rod). Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
 
-    // Gemini if key set, else Anthropic
+    // Gemini only
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-    const freshKey=localStorage.getItem('driftjournal_apikey')||'';
-    if(freshKey)_apiKey=freshKey;
-    const currentApiKey=(freshKey||_apiKey||'').trim();
-
-    if(!geminiKey&&!currentApiKey){
+    if(!geminiKey){
       clearInterval(_aiTickTimer);
-      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your API key in Profile → Maps & AI to enable fish ID</div></div>';
+      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Gemini API key in Profile → Maps & AI to enable fish ID</div></div>';
       return;
     }
 
@@ -1198,24 +1182,6 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
             {text:prompt}
           ]}],
           generationConfig:{maxOutputTokens:200,temperature:0.1}
-        })
-      });
-    } else {
-      fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          'anthropic-dangerous-direct-browser-access':'true',
-          'anthropic-version':'2023-06-01',
-          'x-api-key':currentApiKey
-        },
-        body:JSON.stringify({
-          model:'claude-haiku-4-5-20251001',
-          max_tokens:200,
-          messages:[{role:'user',content:[
-            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-            {type:'text',text:prompt}
-          ]}]
         })
       });
     }
@@ -1237,15 +1203,24 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     }
 
     const data=await response.json();
-    // Handle both Gemini and Claude response formats
-    const text=(
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||  // Gemini
-      data.content?.[0]?.text ||                           // Claude
-      ''
-    );
-    const clean=text.replace(/```json|```/g,'').trim();
+    // Handle Gemini response - may have thinking tokens, find the JSON part
+    let text='';
+    if(data.candidates?.[0]?.content?.parts){
+      // Gemini: get last text part (after any thinking)
+      const parts=data.candidates[0].content.parts;
+      for(let i=parts.length-1;i>=0;i--){
+        if(parts[i].text){text=parts[i].text;break;}
+      }
+    } else {
+      text=data.content?.[0]?.text||'';
+    }
+    // Strip markdown, find the JSON object
+    let clean=text.replace(/```json[\s\S]*?```/g,s=>s.replace(/```json|```/g,'')).replace(/```/g,'').trim();
+    // Extract just the JSON object if there's surrounding text
+    const jsonMatch=clean.match(/\{[\s\S]*\}/);
+    if(jsonMatch) clean=jsonMatch[0];
     const result=JSON.parse(clean);
-    // Log mesh counting result for debugging
+    // Log result for debugging
     if(result.mesh_holes_counted!==undefined){
       console.log('Mesh holes counted:',result.mesh_holes_counted,'× '+getNetSize()+'" =',result.length+'"');
     }
@@ -2313,12 +2288,11 @@ function saveMapboxToken(){
   if(typeof showToast==='function')showToast('Mapbox token saved!');
 }
 function loadApiKeyUI(){
-  const ak=localStorage.getItem('driftjournal_apikey')||'';
-  const ai=document.getElementById('apiKeyInput');if(ai)ai.value=ak;
-  const as=document.getElementById('apiKeyStatus');if(as)as.textContent=ak?'✓ Active: '+ak.substring(0,12)+'...':'';
   const gk=localStorage.getItem('driftjournal_gemini_key')||'';
-  const gi=document.getElementById('geminiKeyInput');if(gi)gi.value=gk;
-  const gs=document.getElementById('geminiKeyStatus');if(gs)gs.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
+  const gi=document.getElementById('geminiKeyInput');
+  if(gi) gi.value='';
+  const gs=document.getElementById('geminiKeyStatus');
+  if(gs) gs.textContent=gk?'✓ Key is saved — paste above to replace it':'';
   const mt=localStorage.getItem('driftjournal_mapbox_token')||'';
   const mi=document.getElementById('mapboxTokenInput');if(mi)mi.value=mt;
   const ms=document.getElementById('mapboxTokenStatus');if(ms)ms.textContent=mt?'✓ Token active':'';
@@ -2358,18 +2332,7 @@ function saveMapboxToken(){
   if(s)s.textContent='✓ Saved';
   showToast('Mapbox token saved!');
 }
-function loadApiKeyUI(){
-  const gk=localStorage.getItem('driftjournal_gemini_key')||'';
-  const gkInp=document.getElementById('geminiKeyInput');
-  const gkSt=document.getElementById('geminiKeyStatus');
-  if(gkInp) gkInp.value=gk;
-  if(gkSt) gkSt.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'Enter your Gemini key above';
-  const mbt=localStorage.getItem('driftjournal_mapbox_token')||'';
-  const mbtInp=document.getElementById('mapboxTokenInput');
-  const mbtSt=document.getElementById('mapboxTokenStatus');
-  if(mbtInp) mbtInp.value=mbt;
-  if(mbtSt) mbtSt.textContent=mbt?'✓ Token active':'';
-}
+
 function toggleNetSettings(){
   const el=document.getElementById('netSettings');
   const ch=document.getElementById('netChevron');
