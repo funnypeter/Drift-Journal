@@ -1,5 +1,5 @@
 // Drift Journal Service Worker v2
-const CACHE = 'drift-v6';  // bump version to force cache refresh
+const CACHE = 'drift-v8';  // bump version to force cache refresh
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {

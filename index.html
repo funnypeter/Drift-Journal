@@ -478,7 +478,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   <h1 class="feed-title">Recent Journeys</h1>
   <div class="feed-line"></div>
   <div class="feed-container">
-<div id="feedContent"></div></div>
+<div id="feedContent"></div>
+  </div>
 </div>
 
 <!-- LOCATION STEP -->
@@ -867,11 +868,8 @@ let currentEntryIdx=null;
 
 // ══ UTILS ══════════════════════════════════════════════════════
 function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}if(id!=='vEntry')closeEntryMapModal();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
-function switchTab(v,b){showView(v);if(v==='vProfile')loadApiKeyUI();if(v==='vProfile')loadApiKeyUI();document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
+function switchTab(v,b){showView(v);if(v==='vProfile')loadApiKeyUI();if(v==='vMap')try{onMapTabShown();}catch(e){}if(v==='vProfile')loadApiKeyUI();document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
-  localStorage.setItem('driftjournal_gemini_key',k);
-  if(status)status.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
-
 function fmtDisplay(d){const p=d.split('-');return MONTHS[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')+', '+p[0]}
 function fmtShort(d){const p=d.split('-');return MONTHS_SHORT[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')}
 function sortedTrips(){return [...trips].sort((a,b)=>new Date(b.date)-new Date(a.date))}
@@ -1686,6 +1684,9 @@ function sealEntry(){
 // ══ FEED & MAP ═════════════════════════════════════════════════
 
 
+function onMapTabShown(){
+  try{if(typeof renderMap==='function')renderMap();}catch(e){console.log('map err:',e.message);}
+}
 function renderFeed(){
   const sorted=sortedTrips();const fc=document.getElementById('feedContent');
   if(!sorted.length){fc.innerHTML=`<div class="empty-feed"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><h3>No journeys yet</h3><p>Tap + to log your first trip.</p><button onclick="startNewEntry()">Log First Trip</button></div>`;return}
