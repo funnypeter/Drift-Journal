@@ -1181,7 +1181,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
             {inline_data:{mime_type:mediaType,data:base64}},
             {text:prompt}
           ]}],
-          generationConfig:{maxOutputTokens:500,temperature:0,responseMimeType:'application/json'}
+          generationConfig:{maxOutputTokens:1024,temperature:0}
         })
       });
     }
@@ -1211,17 +1211,16 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
         if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}
       }
     }
-    // Robustly extract JSON object from any surrounding text/markdown
-    // Handles: ```json {...} ```, json {...}, plain {...}, thinking preamble, etc.
-    let clean=text
-      .replace(/```json/gi,'')  // remove ```json
-      .replace(/```/g,'')       // remove remaining backticks
-      .replace(/^json\s*/i,'')  // remove leading 'json' word
-      .trim();
-    // Extract just the {...} object - find first { and last }
+    // Extract JSON from response - strip markdown, find { ... }
+    let clean=text.trim();
+    // Remove markdown code fences
+    clean=clean.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    // Remove leading word 'json' if present
+    if(clean.toLowerCase().startsWith('json')) clean=clean.slice(4).trim();
+    // Find first { and last } to extract the JSON object
     const jsonStart=clean.indexOf('{');
     const jsonEnd=clean.lastIndexOf('}');
-    if(jsonStart<0||jsonEnd<0||jsonEnd<=jsonStart) throw new Error('No JSON in response: '+clean.substring(0,60));
+    if(jsonStart<0||jsonEnd<=jsonStart) throw new Error('No JSON in response: '+clean.substring(0,60));
     clean=clean.substring(jsonStart,jsonEnd+1);
         const result=JSON.parse(clean);
     // Log result for debugging
