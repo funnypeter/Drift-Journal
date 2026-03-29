@@ -729,15 +729,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   </div>
   <div class="profile-section">
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:10px">Maps &amp; AI</div>
-    <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:3px">🤖 Anthropic API Key</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Enables AI fish ID &amp; location suggestions. Get a free key at <a href="https://console.anthropic.com/account/keys" target="_blank" style="color:var(--teal)">console.anthropic.com</a></div>
-      <div style="display:flex;gap:8px">
-        <input id="apiKeyInput" type="text" placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)" onpaste="setTimeout(saveApiKey,50)" onchange="saveApiKey()"/>
-        <button onclick="saveApiKey()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
-      </div>
-      <div id="apiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
-    </div>
+
     <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600;margin-bottom:3px">🔮 Gemini API Key</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Used for fish ID &amp; sizing (better vision). Free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--teal)">aistudio.google.com</a></div>
@@ -807,7 +799,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 // Mapbox token
 const MAPBOX_TOKEN = localStorage.getItem('driftjournal_mapbox_token') || 'pk.eyJ1IjoiZnVubnlwZXRlciIsImEiOiJjbW5hcHoxd2owbnM4MnhwcDQ5NHR1em52In0.NZO2axyT1gGDwM4H3NsOpA';
 if(typeof mapboxgl !== 'undefined') mapboxgl.accessToken = MAPBOX_TOKEN;
-let _apiKey = localStorage.getItem('driftjournal_apikey') || '';
 // ══ LOCATION DB ═══════════════════════════════════════════════
 // Each entry includes usgsId for auto-fetch
 // Seed favorites — user's previously selected locations stored in localStorage
@@ -1135,17 +1126,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 
   try{
     // Check API key first
-    // Read fresh key - be explicit about null vs empty string
-    const freshKey = localStorage.getItem('driftjournal_apikey') || null;
-    if(freshKey) _apiKey = freshKey;
-    const currentApiKey = (freshKey || _apiKey || '').trim();
-    if(!currentApiKey){
-      clearInterval(_aiTickTimer);
-      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Anthropic API key in Profile tab to enable fish ID</div></div>';
-      return;
-    }
-
-    // Resize image to max 1024px — API limit is 5MB base64
+    // Read fresh key - be explicit about null vs empty string// Resize image to max 1024px — API limit is 5MB base64
     const resizedDataUrl = await new Promise(function(resolve){
       const img = new Image();
       img.onload = function(){
@@ -1170,42 +1151,28 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     // Build prompt
     const netSz=getNetSize();
     const prompt=netSz
-      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species too. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
+      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
       :'Identify this fish and estimate its length in inches from mouth to tail. Use visible references (hands, net, rod). Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
 
-    // Prefer Gemini (better spatial vision), fall back to Claude
+    // Gemini only
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-    let fetchUrl, fetchBody, fetchHeaders;
+    if(!geminiKey){
+      clearInterval(_aiTickTimer);
+      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Gemini API key in Profile → Maps & AI to enable fish ID</div></div>';
+      return;
+    }
 
-    if(geminiKey){
-      fetchUrl='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey;
-      fetchHeaders={'Content-Type':'application/json'};
-      fetchBody=JSON.stringify({
+    const fetchPromise=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
         contents:[{parts:[
           {inline_data:{mime_type:mediaType,data:base64}},
           {text:prompt}
         ]}],
         generationConfig:{maxOutputTokens:200,temperature:0.1}
-      });
-    } else {
-      fetchUrl='https://api.anthropic.com/v1/messages';
-      fetchHeaders={
-        'Content-Type':'application/json',
-        'anthropic-dangerous-direct-browser-access':'true',
-        'anthropic-version':'2023-06-01'
-      };
-      if(currentApiKey) fetchHeaders['x-api-key']=String(currentApiKey);
-      fetchBody=JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
-        max_tokens:200,
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-          {type:'text',text:prompt}
-        ]}]
-      });
-    }
-
-    const fetchPromise=fetch(fetchUrl,{method:'POST',headers:fetchHeaders,body:fetchBody});
+      })
+    });
 
     const timeoutPromise=new Promise(function(_,reject){
       setTimeout(function(){reject(new Error('timeout'));},30000);
@@ -2414,378 +2381,16 @@ async function handleBulkPhotos(files){
         });
         const base64=resized.split(',')[1];
         const mtype='image/jpeg';
-        const bulkApiKey = (localStorage.getItem('driftjournal_apikey') || _apiKey || '').trim();
-        const bulkHeaders = {'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','anthropic-version':'2023-06-01'};
-        if(bulkApiKey) bulkHeaders['x-api-key'] = String(bulkApiKey);
-        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+        const bulkApiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
+        if(!bulkApiKey) continue; // skip AI if no key
+        const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+bulkApiKey,{
           method:'POST',
-          headers: bulkHeaders,
+          headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
-            model:'claude-haiku-4-5-20251001',max_tokens:120,
-            messages:[{role:'user',content:[
-              {type:'image',source:{type:'base64',media_type:mtype,data:base64}},
-              {type:'text',text:'Is there a fish in this photo? Reply ONLY with JSON: {"hasFish":true,"species":"Rainbow Trout","length":"16","confidence":85} or {"hasFish":false}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'}
-            ]}]
+            contents:[{parts:[
+              {inline_data:{mime_type:'image/jpeg',data:base64}},
+              {text:'Is there a fish in this photo? Reply ONLY with JSON: {"hasFish":true,"species":"Rainbow Trout","length":"12"} or {"hasFish":false}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'}
+            ]}],
+            generationConfig:{maxOutputTokens:120,temperature:0.1}
           })
-        });
-        if(resp.ok){
-          const rd=await resp.json();
-          const txt=rd.content?.[0]?.text||'{}';
-          const parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());
-          p.aiResult=parsed;
-        }
-      }catch(e){p.aiResult={hasFish:false};}
-    }
-  }
-
-  document.getElementById('bulkProgressBar').style.width='100%';
-  document.getElementById('bulkProgressLabel').textContent='Done! Review your trips below.';
-
-  // ── Build trip previews ───────────────────────────────────────────────────
-  _bulkTrips=groupList;
-  const previewsEl=document.getElementById('bulkTripPreviews');
-  previewsEl.innerHTML='';
-
-  if(!groupList.length){
-    previewsEl.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No photos could be processed.</div>';
-    return;
-  }
-
-  groupList.forEach((g,gi)=>{
-    const fishPhotos=g.photos.filter(p=>p.aiResult?.hasFish!==false);
-    const dateObj=new Date(g.date+'T12:00:00');
-    const displayDate=dateObj.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-    const previewImgs=g.photos.slice(0,3).map(p=>`<img src="${p.dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0"/>`).join('');
-
-    const card=document.createElement('div');
-    card.style.cssText='background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,.06)';
-    card.innerHTML=`
-      <div style="padding:14px">
-        <div style="display:flex;align-items:flex-start;gap:12px">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:3px">${displayDate}</div>
-            <div style="font-family:var(--serif);font-size:1rem;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.locationName}</div>
-            <div style="font-size:11px;color:var(--muted)">${g.locationFull}</div>
-          </div>
-          <div style="background:var(--teal-light);color:var(--teal);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0">
-            ${fishPhotos.length} catch${fishPhotos.length!==1?'es':''}
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;margin-top:12px;overflow-x:auto">
-          ${g.photos.map((p,pi)=>`
-            <div style="position:relative;flex-shrink:0">
-              <img src="${p.dataUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"/>
-              ${p.aiResult?.hasFish?`<div style="position:absolute;bottom:2px;left:2px;right:2px;background:rgba(30,77,67,.85);color:white;font-size:8px;font-weight:700;text-align:center;border-radius:4px;padding:1px 2px">${p.aiResult.species?.split(' ').pop()||'Fish'}</div>`:''}
-            </div>
-          `).join('')}
-        </div>
-        ${g.lat?`<div style="font-size:10px;color:var(--muted);margin-top:8px">📍 ${g.lat.toFixed(4)}°N ${Math.abs(g.lng).toFixed(4)}°W</div>`:`<div style="margin-top:10px">
-  <div style="font-size:10px;color:var(--muted);margin-bottom:4px">📍 No GPS — search for the location</div>
-  <div style="position:relative">
-    <input id="bulkLocInput_${gi}" data-group-idx="${gi}" placeholder="Search river, creek, lake..." autocomplete="off"
-      style="width:100%;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:7px 10px 7px 28px;font-size:12px;font-family:var(--sans);background:var(--bg);color:var(--ink);outline:none;box-sizing:border-box"
-      oninput="bulkLocSearch(this,${gi})"/>
-    <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--muted);fill:none;stroke-width:2;pointer-events:none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <div id="bulkLocResults_${gi}" style="position:absolute;top:100%;left:0;right:0;background:var(--bg);border:1px solid rgba(0,0,0,.12);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;display:none;max-height:160px;overflow-y:auto;margin-top:2px"></div>
-  </div>
-</div>`}
-      </div>`;
-    previewsEl.appendChild(card);
-  });
-
-  const totalCatches=groupList.reduce((s,g)=>s+g.photos.filter(p=>p.aiResult?.hasFish!==false).length,0);
-  document.getElementById('bulkSaveLabel').textContent=`Save ${groupList.length} Trip${groupList.length!==1?'s':''} (${totalCatches} catches)`;
-  document.getElementById('bulkSaveRow').style.display='block';
-}
-
-let _bulkLocTimer = {};
-function bulkLocSearch(input, gi){
-  const val = input.value.trim();
-  const resultsEl = document.getElementById('bulkLocResults_'+gi);
-  clearTimeout(_bulkLocTimer[gi]);
-  if(!val || val.length < 2){ if(resultsEl) resultsEl.style.display='none'; return; }
-  _bulkLocTimer[gi] = setTimeout(async function(){
-    try{
-      const q = encodeURIComponent(val);
-      const r = await fetch('https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=5&countrycodes=us,ca&addressdetails=1',
-        {headers:{'User-Agent':'DriftJournal/1.0','Accept-Language':'en'}});
-      const results = await r.json();
-      if(!resultsEl) return;
-      if(!results.length){
-        // "Use as typed" fallback
-        const fb=document.createElement('div');
-        fb.style.cssText='padding:8px 10px;font-size:12px;color:var(--muted);cursor:pointer';
-        fb.textContent='📍 Use "'+val+'" as location';
-        fb.onclick=function(){bulkLocSelect(gi,val,val,null,null);};
-        resultsEl.innerHTML='';resultsEl.appendChild(fb);
-        resultsEl.style.display='block'; return;
-      }
-      const waterTypes = new Set(['stream','river','creek','lake','reservoir','pond','waterway','water','bay','inlet','canal']);
-      const sorted = results.sort((a,b)=>{
-        const at=waterTypes.has(a.type)||waterTypes.has(a.class);
-        const bt=waterTypes.has(b.type)||waterTypes.has(b.class);
-        return bt-at;
-      });
-      resultsEl.style.display='block';
-    }catch(e){ console.log('bulk loc search err:',e.message); }
-  }, 400);
-}
-function bulkLocSelect(gi, name, full, lat, lng){
-  _bulkTrips[gi].locationName = name;
-  _bulkTrips[gi].locationFull = full;
-  _bulkTrips[gi].lat = lat;
-  _bulkTrips[gi].lng = lng;
-  const inp = document.getElementById('bulkLocInput_'+gi);
-  if(inp) inp.value = full;
-  const res = document.getElementById('bulkLocResults_'+gi);
-  if(res) res.style.display='none';
-  // Update the coord display
-  const coordEl = inp?.closest('[style*="margin-top:10px"]')?.querySelector('[data-coords]');
-  if(lat && coordEl) coordEl.textContent='📍 '+lat.toFixed(4)+'°N '+Math.abs(lng).toFixed(4)+'°W';
-}
-
-function readFileAsDataUrl(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=e=>res(e.target.result);
-    r.onerror=rej;
-    r.readAsDataURL(file);
-  });
-}
-
-async function toggleNetSettings(){
-  const el=document.getElementById('netSettings');
-  const ch=document.getElementById('netChevron');
-  const open=el.style.display==='none'||el.style.display==='';
-  el.style.display=open?'block':'none';
-  if(ch) ch.style.transform=open?'rotate(90deg)':'';
-  if(open) loadNetSettings();
-}
-function loadNetSettings(){
-  const saved=localStorage.getItem('driftjournal_net_size')||'';
-  const status=document.getElementById('netSizeStatus');
-  document.querySelectorAll('.net-size-btn').forEach(function(b){
-    b.style.background='var(--bg)';
-    b.style.borderColor='rgba(0,0,0,.15)';
-    b.style.color='var(--ink)';
-    b.style.fontWeight='400';
-  });
-  if(saved){
-    // Find matching button
-    const btn=document.querySelector('.net-size-btn[data-size="'+saved+'"]');
-    if(btn){
-      btn.style.background='var(--teal)';btn.style.borderColor='var(--teal)';
-      btn.style.color='white';btn.style.fontWeight='600';
-      if(status) status.textContent='✓ Net mesh: '+saved+'" — AI will use this for sizing';
-    } else {
-      // Custom value
-      const customBtn=document.querySelector('.net-size-btn[data-size="custom"]');
-      if(customBtn){customBtn.style.background='var(--teal)';customBtn.style.borderColor='var(--teal)';customBtn.style.color='white';customBtn.style.fontWeight='600';}
-      const customInput=document.getElementById('netCustomInput');
-      if(customInput) customInput.style.display='flex';
-      const customField=document.getElementById('netCustomSize');
-      if(customField) customField.value=saved;
-      if(status) status.textContent='✓ Net mesh: '+saved+'" — AI will use this for sizing';
-    }
-  } else {
-    if(status) status.textContent='Set your net mesh size to improve length estimates';
-  }
-}
-function setNetSize(size){
-  const customInput=document.getElementById('netCustomInput');
-  // Reset all buttons
-  document.querySelectorAll('.net-size-btn').forEach(function(b){
-    b.style.background='var(--bg)';b.style.borderColor='rgba(0,0,0,.15)';
-    b.style.color='var(--ink)';b.style.fontWeight='400';
-  });
-  // Highlight selected
-  const btn=document.querySelector('.net-size-btn[data-size="'+size+'"]');
-  if(btn){btn.style.background='var(--teal)';btn.style.borderColor='var(--teal)';btn.style.color='white';btn.style.fontWeight='600';}
-  if(size==='custom'){
-    if(customInput) customInput.style.display='flex';
-    return;
-  }
-  if(customInput) customInput.style.display='none';
-  saveNetSize(size);
-}
-function saveNetSize(size){
-  if(!size||isNaN(parseFloat(size))) return;
-  const s=String(parseFloat(size));
-  localStorage.setItem('driftjournal_net_size',s);
-  const status=document.getElementById('netSizeStatus');
-  if(status) status.textContent='✓ Net mesh: '+s+'" — AI will use this for sizing';
-  showToast('Net size saved: '+s+'"');
-}
-function getNetSize(){
-  return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;
-}
-function saveGeminiKey(){
-  const inp=document.getElementById('geminiKeyInput');
-  const k=String(inp?.value||'').trim();
-  const status=document.getElementById('geminiKeyStatus');
-  if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
-  localStorage.setItem('driftjournal_gemini_key',k);
-  if(status)status.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
-  showToast('Gemini key saved!');
-}
-function saveApiKey(){
-  const inp=document.getElementById('apiKeyInput');
-  const k=String(inp?.value||'').trim();
-  const status=document.getElementById('apiKeyStatus');
-  if(!k||k.length<10){
-    if(status)status.textContent='Key too short — paste the full key';
-    return;
-  }
-  _apiKey=k;
-  localStorage.setItem('driftjournal_apikey',k);
-  const check=localStorage.getItem('driftjournal_apikey');
-  const ok=check&&check.length>10;
-  if(status)status.textContent=ok?'✓ Saved: '+k.substring(0,12)+'...':'⚠ Save failed — try again';
-  if(ok){showToast('✓ API key saved!');}
-}
-function saveMapboxToken(){
-  const t=document.getElementById('mapboxTokenInput')?.value.trim();
-  const status=document.getElementById('mapboxTokenStatus');
-  if(!t){if(status)status.textContent='Please enter a token';return;}
-  localStorage.setItem('driftjournal_mapbox_token',t);
-  if(typeof mapboxgl!=='undefined') mapboxgl.accessToken=t;
-  if(status)status.textContent='✓ Saved — reload to activate maps';
-  showToast('Mapbox token saved!');
-}
-function loadApiKeyUI(){
-  const gk=localStorage.getItem('driftjournal_gemini_key')||'';
-  const gkInp=document.getElementById('geminiKeyInput');
-  const gkSt=document.getElementById('geminiKeyStatus');
-  if(gkInp) gkInp.value=gk;
-  if(gkSt) gkSt.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
-  const ak=localStorage.getItem('driftjournal_apikey');
-  const akInp=document.getElementById('apiKeyInput');
-  const akStatus=document.getElementById('apiKeyStatus');
-  if(akInp&&ak){akInp.value=ak;}
-  if(akStatus){akStatus.textContent=ak?'✓ Active: '+ak.substring(0,12)+'...':'';}
-  const mbt=localStorage.getItem('driftjournal_mapbox_token');
-  const mbtInp=document.getElementById('mapboxTokenInput');
-  const mbtStatus=document.getElementById('mapboxTokenStatus');
-  if(mbtInp&&mbt){mbtInp.value=mbt;}
-  if(mbtStatus){mbtStatus.textContent=mbt?'✓ Token active':'';}
-}
-async function saveBulkTrips(){
-  if(!_bulkTrips.length) return;
-  const btn=document.querySelector('#bulkSaveRow button');
-  if(btn){btn.disabled=true;btn.style.opacity='.6';}
-
-  for(const g of _bulkTrips){
-    const fishPhotos=g.photos.filter(p=>p.aiResult?.hasFish!==false);
-    const catches_list=fishPhotos.map(p=>({
-      species:p.aiResult?.species||'Unknown',
-      fly:'—',size:'16',
-      length:p.aiResult?.length||'—',
-      time:'—',notes:'',
-      photo:p.dataUrl
-    }));
-    const allPhotos=g.photos.map(p=>p.dataUrl);
-    const dateObj=new Date(g.date+'T12:00:00');
-    const displayDate=dateObj.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-    const newTrip={
-      id:Date.now()+Math.random(),
-      title:g.locationName+' Trip',
-      date:g.date,displayDate,
-      location:g.locationFull,state:g.state||'',
-      lat:g.lat,lng:g.lng,
-      flow:'',water:'',air:'',baro:'',weather:'',moon:'🌔',
-      notes:'Imported from photos.',
-      catches_list,photos:allPhotos,
-      bgColor:BG[trips.length%BG.length]
-    };
-    trips.push(newTrip);
-    // Small delay to ensure unique IDs
-    await new Promise(r=>setTimeout(r,10));
-  }
-
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
-  document.getElementById('statTrips').textContent=trips.length;
-  document.getElementById('statCatches').textContent=trips.reduce((s,t)=>s+t.catches_list.length,0);
-  renderFeed();
-  closeBulkImport();
-  showToast(_bulkTrips.length+' trips imported!');
-  switchTab('vHome','btn-home');
-}
-</script>
-
-<script>
-// Register service worker for PWA offline support
-if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js')
-      .then(function(reg){
-        console.log('SW registered:', reg.scope);
-      })
-      .catch(function(err){
-        console.log('SW registration failed:', err);
-      });
-  });
-}
-
-// Show install prompt on Android
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', function(e){
-  e.preventDefault();
-  deferredPrompt = e;
-  // Show subtle install banner
-  const banner = document.getElementById('installBanner');
-  if(banner) banner.style.display = 'flex';
-});
-
-window.addEventListener('appinstalled', function(){
-  const banner = document.getElementById('installBanner');
-  if(banner) banner.style.display = 'none';
-  deferredPrompt = null;
-});
-
-function installApp(){
-  if(deferredPrompt){
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function(result){
-      deferredPrompt = null;
-      const banner = document.getElementById('installBanner');
-      if(banner) banner.style.display = 'none';
-    });
-  }
-}
-
-// Swipe down to close map modals — only from header strip, not map canvas
-(function(){
-  let _swipeStartY=0, _swipeStartTime=0, _swipingHeader=false;
-  function isModalHeader(el){
-    // Only trigger swipe-close when starting drag in the top header area (first 60px)
-    return el && el.closest && el.closest('[data-modal-header]');
-  }
-  document.addEventListener('touchstart',function(e){
-    const mm=document.getElementById('mapModal');
-    const em=document.getElementById('entryMapModal');
-    const active=(mm&&mm.style.display==='flex')||(em&&em.style.display==='flex');
-    if(active){
-      _swipeStartY=e.touches[0].clientY;
-      _swipeStartTime=Date.now();
-      // Only allow swipe-close from very top of screen (header region)
-      _swipingHeader=_swipeStartY < 80;
-    }
-  },{passive:true});
-  document.addEventListener('touchend',function(e){
-    if(!_swipingHeader) return;
-    const dy=e.changedTouches[0].clientY-_swipeStartY;
-    const dt=Date.now()-_swipeStartTime;
-    const velocity=dy/dt;
-    // Require: 120px downward AND fast (>0.4px/ms) to avoid accidental close
-    if(dy>120 && velocity>0.4){
-      const mm=document.getElementById('mapModal');
-      const em=document.getElementById('entryMapModal');
-      if(mm&&mm.style.display==='flex') closeMapModal();
-      if(em&&em.style.display==='flex') closeEntryMapModal();
-    }
-    _swipingHeader=false;
-  },{passive:true});
-})();
-</script>
-</body>
-</html>
+        })
