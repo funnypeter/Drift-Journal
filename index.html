@@ -1156,33 +1156,45 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     const base64 = useDataUrl.split(',')[1];
     const mediaType = 'image/jpeg';
 
-    const reqHeaders = {
-      'Content-Type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      'anthropic-version': '2023-06-01'
-    };
-    if(currentApiKey) reqHeaders['x-api-key'] = String(currentApiKey);
-    const fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers: reqHeaders,
-      body:JSON.stringify({
+    // Build prompt
+    const netSz=getNetSize();
+    const prompt=netSz
+      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species too. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
+      :'Identify this fish and estimate its length in inches from mouth to tail. Use visible references (hands, net, rod). Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
+
+    // Prefer Gemini (better spatial vision), fall back to Claude
+    const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
+    let fetchUrl, fetchBody, fetchHeaders;
+
+    if(geminiKey){
+      fetchUrl='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey;
+      fetchHeaders={'Content-Type':'application/json'};
+      fetchBody=JSON.stringify({
+        contents:[{parts:[
+          {inline_data:{mime_type:mediaType,data:base64}},
+          {text:prompt}
+        ]}],
+        generationConfig:{maxOutputTokens:200,temperature:0.1}
+      });
+    } else {
+      fetchUrl='https://api.anthropic.com/v1/messages';
+      fetchHeaders={
+        'Content-Type':'application/json',
+        'anthropic-dangerous-direct-browser-access':'true',
+        'anthropic-version':'2023-06-01'
+      };
+      if(currentApiKey) fetchHeaders['x-api-key']=String(currentApiKey);
+      fetchBody=JSON.stringify({
         model:'claude-haiku-4-5-20251001',
         max_tokens:200,
-        messages:[{
-          role:'user',
-          content:[
-            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-            {type:'text',text:(function(){
-              const netSz=getNetSize();
-              if(netSz){
-                return 'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species too. Reply ONLY with JSON: {\"species\":\"Rainbow Trout\",\"length\":\"12.5\",\"confidence\":85}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
-              }
-              return 'Identify this fish and estimate its length in inches from mouth tip to tail end. Use any visible reference (hands, net, rod). Reply ONLY with JSON: {\"species\":\"Rainbow Trout\",\"length\":\"12.5\",\"confidence\":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
-            })()}
-          ]
-        }]
-      })
-    });
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+          {type:'text',text:prompt}
+        ]}]
+      });
+    }
+
+    const fetchPromise=fetch(fetchUrl,{method:'POST',headers:fetchHeaders,body:fetchBody});
 
     const timeoutPromise=new Promise(function(_,reject){
       setTimeout(function(){reject(new Error('timeout'));},30000);
@@ -1201,7 +1213,12 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     }
 
     const data=await response.json();
-    const text=data.content?.[0]?.text||'';
+    // Handle both Gemini and Claude response formats
+    const text=(
+      data.candidates?.[0]?.content?.parts?.[0]?.text ||  // Gemini
+      data.content?.[0]?.text ||                           // Claude
+      ''
+    );
     const clean=text.replace(/```json|```/g,'').trim();
     const result=JSON.parse(clean);
     // Log mesh counting result for debugging
