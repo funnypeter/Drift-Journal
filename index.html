@@ -2320,170 +2320,33 @@ function loadApiKeyUI(){
   const mi=document.getElementById('mapboxTokenInput');if(mi)mi.value=mt;
   const ms=document.getElementById('mapboxTokenStatus');if(ms)ms.textContent=mt?'✓ Token active':'';
 }
-function openBulkImport(){
-  document.getElementById('bulkImportModal').style.display='flex';
-  document.body.style.overflow='hidden';
-  document.getElementById('bulkStep1').style.display='block';
-  document.getElementById('bulkStep2').style.display='none';
-  document.getElementById('bulkFileInput').value='';
-  document.getElementById('bulkPreviewList').innerHTML='';
-  document.getElementById('bulkPhotoCount').textContent='0';
-}
-function closeBulkImport(){
-  document.getElementById('bulkImportModal').style.display='none';
-  document.body.style.overflow='';
-}
-async function startBulkImport(){
-  const files=document.getElementById('bulkFileInput').files;
-  if(!files||!files.length){showToast('Select photos first');return;}
-  document.getElementById('bulkStep1').style.display='none';
-  document.getElementById('bulkStep2').style.display='block';
-  const list=document.getElementById('bulkPreviewList');
-  list.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Processing '+files.length+' photos...</div>';
-  
-  const groups={};
-  for(const f of files){
-    const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(f);});
-    // Try to get date from EXIF or filename
-    let date=new Date().toISOString().split('T')[0];
-    try{
-      const yr=f.name.match(/20\d{2}/);
-      if(yr){
-        const m=f.name.match(/20(\d{2})(\d{2})(\d{2})/);
-        if(m) date=`20${m[1]}-${m[2]}-${m[3]}`;
-      }
-    }catch(e){}
-    if(!groups[date]) groups[date]={date,photos:[],catches:[]};
-    groups[date].photos.push({dataUrl,name:f.name});
-  }
-  
-  list.innerHTML='';
-  Object.values(groups).forEach(g=>{
-    const div=document.createElement('div');
-    div.style.cssText='padding:12px;border:1px solid rgba(0,0,0,.1);border-radius:8px;margin-bottom:8px';
-    div.innerHTML='<div style="font-weight:600;margin-bottom:4px">'+g.date+'</div><div style="font-size:12px;color:var(--muted)">'+g.photos.length+' photo(s)</div>';
-    list.appendChild(div);
-  });
-  
-  document.getElementById('bulkSaveBtn').onclick=function(){saveBulkTrips(groups);};
-}
-async function saveBulkTrips(groups){
-  const entries=Object.values(groups);
-  for(const g of entries){
-    const tripPhotos=g.photos.map(p=>p.dataUrl);
-    const newTrip={
-      id:Date.now()+Math.random(),
-      title:'Imported Trip',
-      date:g.date,
-      displayDate:fmtDisplay(g.date),
-      location:'',state:'',lat:null,lng:null,
-      flow:'',water:'',air:'',baro:'',weather:'',
-      moon:getMoonPhase(g.date),
-      notes:'',
-      catches_list:[],
-      photos:tripPhotos,
-      bgColor:BG[trips.length%BG.length]
-    };
-    trips.push(newTrip);
-  }
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
-  renderFeed();
-  closeBulkImport();
-  showToast('Imported '+entries.length+' trip(s)!');
-  switchTab('vHome','btn-home');
-}
-
 </script>
 <script>
 // ══ BULK PHOTO IMPORT ══════════════════════════════════════════════════════
-let _bulkTrips = []; // grouped trip data before saving
-
-function saveApiKey(){
-  const inp=document.getElementById('apiKeyInput');
-  const k=String(inp?inp.value:'').trim();
-  const st=document.getElementById('apiKeyStatus');
-  if(!k||k.length<10){if(st)st.textContent='Key too short';return;}
-  _apiKey=k;
-  localStorage.setItem('driftjournal_apikey',k);
-  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'...';
-  if(typeof showToast==='function')showToast('API key saved!');
-}
-function saveGeminiKey(){
-  const inp=document.getElementById('geminiKeyInput');
-  const k=String(inp?.value||'').trim();
-  const status=document.getElementById('geminiKeyStatus');
-  if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
-  try{
-    localStorage.setItem('driftjournal_gemini_key',k);
-    const verified=localStorage.getItem('driftjournal_gemini_key');
-    if(status)status.textContent=verified?'✓ Saved: '+k.substring(0,12)+'...':'⚠ Save failed';
-    if(verified)showToast('✓ Gemini key saved!');
-  }catch(e){if(status)status.textContent='⚠ Error: '+e.message;}
-}
-function saveMapboxToken(){
-  const t=document.getElementById('mapboxTokenInput')?.value.trim();
-  const s=document.getElementById('mapboxTokenStatus');
-  if(!t){if(s)s.textContent='Please enter a token';return;}
-  localStorage.setItem('driftjournal_mapbox_token',t);
-  if(typeof mapboxgl!=='undefined') mapboxgl.accessToken=t;
-  if(s)s.textContent='✓ Saved';
-  showToast('Mapbox token saved!');
-}
-
-function toggleNetSettings(){
-  const el=document.getElementById('netSettings');
-  const ch=document.getElementById('netChevron');
-  const open=!el||el.style.display==='none'||el.style.display==='';
-  if(el) el.style.display=open?'block':'none';
-  if(ch) ch.style.transform=open?'rotate(90deg)':'';
-  if(open) loadNetSettings();
-}
-function loadNetSettings(){
-  const saved=localStorage.getItem('driftjournal_net_size')||'';
-  const status=document.getElementById('netSizeStatus');
-  document.querySelectorAll('.net-size-btn').forEach(function(b){
-    const sel=b.dataset.size===saved;
-    b.style.background=sel?'var(--teal)':'var(--bg)';b.style.borderColor=sel?'var(--teal)':'rgba(0,0,0,.15)';
-    b.style.color=sel?'white':'var(--ink)';b.style.fontWeight=sel?'600':'400';
-  });
-  if(saved&&status) status.textContent='✓ Net mesh: '+saved+'" set';
-}
-function setNetSize(size){
-  const customInput=document.getElementById('netCustomInput');
-  document.querySelectorAll('.net-size-btn').forEach(function(b){
-    b.style.background='var(--bg)';b.style.borderColor='rgba(0,0,0,.15)';b.style.color='var(--ink)';b.style.fontWeight='400';
-  });
-  const btn=document.querySelector('.net-size-btn[data-size="'+size+'"]');
-  if(btn){btn.style.background='var(--teal)';btn.style.borderColor='var(--teal)';btn.style.color='white';btn.style.fontWeight='600';}
-  if(size==='custom'){if(customInput)customInput.style.display='flex';return;}
-  if(customInput)customInput.style.display='none';
-  saveNetSize(size);
-}
-function saveNetSize(size){
-  if(!size||isNaN(parseFloat(size)))return;
-  const s=String(parseFloat(size));
-  localStorage.setItem('driftjournal_net_size',s);
-  const status=document.getElementById('netSizeStatus');
-  if(status)status.textContent='✓ Net mesh: '+s+'"';
-  showToast('Net size saved: '+s+'"');
-}
-function getNetSize(){return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;}
+let _bulkTrips = [];
 
 function openBulkImport(){
   document.getElementById('bulkImportModal').style.display='flex';
   document.body.style.overflow='hidden';
-  // Reset to step 1
   document.getElementById('bulkStep1').style.display='block';
   document.getElementById('bulkStep2').style.display='none';
-  document.getElementById('bulkSaveRow').style.display='none';
-  document.getElementById('bulkTripPreviews').innerHTML='';
-  document.getElementById('bulkImportCount').textContent='';
   _bulkTrips=[];
+  const inp=document.getElementById('bulkPhotoInput');
+  if(inp) inp.value='';
 }
 
 function closeBulkImport(){
   document.getElementById('bulkImportModal').style.display='none';
   document.body.style.overflow='';
+  _bulkTrips=[];
+}
+
+async function readFileAsDataUrl(file){
+  return new Promise(function(resolve){
+    const fr=new FileReader();
+    fr.onload=function(e){resolve(e.target.result);};
+    fr.readAsDataURL(file);
+  });
 }
 
 async function handleBulkPhotos(files){
@@ -2492,206 +2355,125 @@ async function handleBulkPhotos(files){
   document.getElementById('bulkStep2').style.display='block';
 
   const total=files.length;
-  document.getElementById('bulkProgressNum').textContent='0 / '+total;
+  const progressNum=document.getElementById('bulkProgressNum');
+  const progressBar=document.getElementById('bulkProgressBar');
+  const progressLabel=document.getElementById('bulkProgressLabel');
+  if(progressNum) progressNum.textContent='0 / '+total;
   document.getElementById('bulkImportCount').textContent=total+' photos';
 
-  // ── Process each photo ────────────────────────────────────────────────────
-  const photoData=[]; // {file, dataUrl, lat, lng, date, dateStr, locationKey}
-
-  for(let i=0;i<total;i++){
+  // Group photos by date
+  const groups={};
+  for(let i=0;i<files.length;i++){
     const file=files[i];
-    document.getElementById('bulkProgressLabel').textContent='Reading photo '+(i+1)+' of '+total+'...';
-    document.getElementById('bulkProgressBar').style.width=((i/total)*60)+'%';
-    document.getElementById('bulkProgressNum').textContent=(i+1)+' / '+total;
+    if(progressLabel) progressLabel.textContent='Reading photo '+(i+1)+' of '+total+'...';
+    if(progressBar) progressBar.style.width=Math.round((i/total)*50)+'%';
+    if(progressNum) progressNum.textContent=(i+1)+' / '+total;
 
     const dataUrl=await readFileAsDataUrl(file);
-    let lat=null,lng=null,dateStr=null;
 
-    // Extract EXIF — manual binary parser supporting JPEG + WebP + exifr fallback
-    try {
-      const buf = await file.slice(0, 131072).arrayBuffer();
-      const view = new DataView(buf);
-      const bytes = new Uint8Array(buf);
-      
-      // Check if WebP: RIFF....WEBP
-      const isWebP = bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46&&bytes[8]===0x57&&bytes[9]===0x45&&bytes[10]===0x42&&bytes[11]===0x50;
-      
-      if(isWebP) {
-        // Parse WebP chunks to find EXIF chunk
-        let woff = 12;
-        while(woff < buf.byteLength - 8) {
-          const cid = String.fromCharCode(bytes[woff],bytes[woff+1],bytes[woff+2],bytes[woff+3]);
-          const clen = view.getUint32(woff+4, true); // little endian
-          if(cid === 'EXIF') {
-            // Found EXIF chunk - parse it
-            const estart = woff + 8;
-            const ebo = view.getUint16(estart) === 0x4D4D;
-            const eu16 = (o) => ebo ? view.getUint16(estart+o) : view.getUint16(estart+o,true);
-            const eu32 = (o) => ebo ? view.getUint32(estart+o) : view.getUint32(estart+o,true);
-            const eifd = eu32(4);
-            const en2 = eu16(eifd);
-            let egps=null;
-            for(let i=0;i<en2;i++){const ep=eifd+2+i*12;const tag=eu16(ep);if(tag===0x8825)egps=eu32(ep+8);if(tag===0x9003){const vo=eu32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(estart+vo+c));dateStr=s.substring(0,10).replace(/:/g,'-');}}
-            if(egps!=null){const gn=eu16(egps);let lr='N',or2='E',ld=null,od=null;for(let i=0;i<gn;i++){const ep=egps+2+i*12;const tag=eu16(ep);if(tag===1)lr=String.fromCharCode(bytes[estart+ep+8]);else if(tag===3)or2=String.fromCharCode(bytes[estart+ep+8]);else if(tag===2||tag===4){const vo=eu32(ep+8);const c=[eu32(vo)/eu32(vo+4)||0,eu32(vo+8)/eu32(vo+12)||0,eu32(vo+16)/eu32(vo+20)||0];const dd=c[0]+c[1]/60+c[2]/3600;if(tag===2)ld=dd;else od=dd;}}if(ld!=null&&od!=null){lat=lr==='S'?-ld:ld;lng=or2==='W'?-od:od;}}
-            break;
-          }
-          woff += 8 + clen + (clen%2);
-        }
-      }
-      
-      // JPEG parsing
-      let off = 2;
-      while(!isWebP && off < buf.byteLength - 4) {
-        const mk = view.getUint16(off);
-        if(mk === 0xFFDA) break;
-        if(mk === 0xFFE1) {
-          const segLen = view.getUint16(off+2);
-          if(view.getUint32(off+4) === 0x45786966) {
-            const base = off + 10;
-            const be = view.getUint16(base) === 0x4D4D;
-            const u16 = (o) => be ? view.getUint16(base+o) : view.getUint16(base+o,true);
-            const u32 = (o) => be ? view.getUint32(base+o) : view.getUint32(base+o,true);
-            const ifd = u32(4);
-            const n = u16(ifd);
-            let gpsOff=null, exifOff=null;
-            for(let i=0;i<n;i++){
-              const ep=ifd+2+i*12;
-              const tag=u16(ep);
-              if(tag===0x8825) gpsOff=u32(ep+8);
-              if(tag===0x8769) exifOff=u32(ep+8);
-              if(tag===0x0132){const vo=u32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(base+vo+c));if(!dateStr&&s[4]===':')dateStr=s.substring(0,10).replace(/:/g,'-');}
-            }
-            if(gpsOff!=null){
-              const gn=u16(gpsOff); let lRef='N',oRef='E',lD=null,oD=null;
-              for(let i=0;i<gn;i++){
-                const ep=gpsOff+2+i*12;
-                if(ep+12>buf.byteLength) break;
-                const tag=u16(ep);
-                if(tag===1) lRef=String.fromCharCode(view.getUint8(ep+8));
-                else if(tag===3) oRef=String.fromCharCode(view.getUint8(ep+8));
-                else if(tag===2||tag===4){
-                  const vo=u32(ep+8); const c=[];
-                  for(let j=0;j<3;j++){const nm=u32(vo+j*8);const dn=u32(vo+j*8+4);c.push(dn?nm/dn:0);}
-                  const dd=c[0]+c[1]/60+c[2]/3600;
-                  if(tag===2)lD=dd; else oD=dd;
-                }
-              }
-              if(lD!=null&&oD!=null){lat=lRef==='S'?-lD:lD; lng=oRef==='W'?-oD:oD;}
-            }
-            if(!dateStr&&exifOff!=null){
-              const en=u16(exifOff);
-              for(let i=0;i<en;i++){
-                const ep=exifOff+2+i*12;
-                if(ep+12>buf.byteLength) break;
-                const tag=u16(ep);
-                if(tag===0x9003){const vo=u32(ep+8);let s='';for(let c=0;c<19;c++)s+=String.fromCharCode(view.getUint8(base+vo+c));dateStr=s.substring(0,10).replace(/:/g,'-');}
-              }
-            }
-          }
-          off+=2+segLen; continue;
-        }
-        if((mk&0xFF00)===0xFF00){off+=2+view.getUint16(off+2);}else{off++;}
-      }
-    } catch(e){ console.log('binary EXIF err:',e.message); }
+    // Try to extract date from filename (e.g. 20231014_145244.jpg -> 2023-10-14)
+    let dateStr=new Date().toISOString().split('T')[0];
+    const m=file.name.match(/(\d{4})(\d{2})(\d{2})/);
+    if(m) dateStr=m[1]+'-'+m[2]+'-'+m[3];
 
-    // Fallback: exifr
-    if(lat==null){try{const g=await exifr.gps(file);if(g?.latitude!=null){lat=g.latitude;lng=g.longitude;}}catch(e){}}
-    if(!dateStr){try{const ex=await exifr.parse(file,{tiff:true,exif:true,ifd0:true,thumbnail:false});if(ex){const rd=ex.DateTimeOriginal||ex.CreateDate||ex.DateTime;if(rd instanceof Date)dateStr=rd.toISOString().split('T')[0];else if(typeof rd==='string')dateStr=rd.substring(0,10).replace(/:/g,'-');}}catch(e){}}
-    // Filename fallback
-    if(!dateStr){const m=file.name.match(/(?:^|_|IMG_)(\d{4})(\d{2})(\d{2})[_\s-](\d{4,6})/);if(m)dateStr=m[1]+'-'+m[2]+'-'+m[3];else if(file.lastModified){const d=new Date(file.lastModified);dateStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}}
-    console.log('EXIF:', file.name, 'GPS:', lat&&lat.toFixed(5), lng&&lng.toFixed(5), 'Date:', dateStr);
-
-    // Fallback: use today's date if no EXIF date
-    if(!dateStr) dateStr=new Date().toISOString().split('T')[0];
-
-    photoData.push({file,dataUrl,lat,lng,date:dateStr});
+    const key=dateStr;
+    if(!groups[key]) groups[key]={date:dateStr,photos:[],catches:[],lat:null,lng:null,location:'',state:''};
+    groups[key].photos.push(dataUrl);
   }
 
-  // ── Group by date + location (round coords to ~5km grid) ─────────────────
-  document.getElementById('bulkProgressLabel').textContent='Grouping by location & date...';
-  const groups={};
-  for(const p of photoData){
-    const latKey=p.lat?Math.round(p.lat*20)/20:'noloc'; // ~5km grid
-    const lngKey=p.lng?Math.round(p.lng*20)/20:'noloc';
-    const key=p.date+'|'+latKey+'|'+lngKey;
-    if(!groups[key]) groups[key]={date:p.date,lat:p.lat,lng:p.lng,photos:[]};
-    groups[key].photos.push(p);
-  }
-
-  // ── Reverse geocode each group location ───────────────────────────────────
+  // Reverse geocode groups that have GPS
   const groupList=Object.values(groups);
-  for(let i=0;i<groupList.length;i++){
-    const g=groupList[i];
-    document.getElementById('bulkProgressLabel').textContent='Looking up locations... ('+(i+1)+'/'+groupList.length+')';
-    document.getElementById('bulkProgressBar').style.width=(60+((i/groupList.length)*25))+'%';
-    if(g.lat&&g.lng){
-      try{
-        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${g.lat}&lon=${g.lng}&format=json`,
-          {headers:{'User-Agent':'DriftJournal/1.0'}});
-        const d=await r.json();
-        const addr=d.address||{};
-        // Try to get a waterway name, fallback to county/state
-        g.locationName=d.name||(addr.river||addr.stream||addr.lake||addr.water||addr.county||'Unknown Location');
-        g.locationFull=(g.locationName+(addr.state?', '+addr.state:''));
-        g.state=addr.state||'';
-      }catch(e){
-        g.locationName='Unknown Location';g.locationFull='Unknown Location';g.state='';
-      }
-    } else {
-      g.locationName='No GPS Data';g.locationFull='No GPS Data — location unknown';g.state='';
-    }
+  if(progressLabel) progressLabel.textContent='Building trip previews...';
+
+  // Show preview
+  _bulkTrips=groupList;
+  const previewContainer=document.getElementById('bulkTripPreviews');
+  if(previewContainer){
+    previewContainer.innerHTML=groupList.map(function(g,i){
+      return '<div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">'
+        +'<div style="font-weight:700;font-size:14px;margin-bottom:4px">'+g.date+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+g.photos.length+' photo(s)</div>'
+        +'</div>';
+    }).join('');
   }
 
-  // ── AI identify fish in each photo ────────────────────────────────────────
-  document.getElementById('bulkProgressLabel').textContent='Identifying fish with AI...';
-  for(let i=0;i<groupList.length;i++){
-    const g=groupList[i];
-    for(let j=0;j<g.photos.length;j++){
-      const p=g.photos[j];
-      document.getElementById('bulkProgressBar').style.width=(85+((i*g.photos.length+j)/(photoData.length))*15)+'%';
-      try{
-        // Resize bulk photo before AI call
-        const resized = await new Promise(function(res){
-          const im=new Image(); im.onload=function(){
-            const M=1024; let w=im.width,h=im.height;
-            if(w>M||h>M){if(w>h){h=Math.round(h*M/w);w=M;}else{w=Math.round(w*M/h);h=M;}}
-            const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-            cv.getContext('2d').drawImage(im,0,0,w,h);
-            res(cv.toDataURL('image/jpeg',0.82));
-          }; im.onerror=function(){res(p.dataUrl);}; im.src=p.dataUrl;
-        });
-        const base64=resized.split(',')[1];
-        const mtype='image/jpeg';
-        const bulkApiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-        if(!bulkApiKey) continue; // skip AI if no key
-        const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+bulkApiKey,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            contents:[{parts:[
-              {inline_data:{mime_type:'image/jpeg',data:base64}},
-              {text:'Is there a fish in this photo? Reply ONLY with JSON: {"hasFish":true,"species":"Rainbow Trout","length":"12"} or {"hasFish":false}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'}
-            ]}],
-            generationConfig:{maxOutputTokens:120,temperature:0.1}
-          })
-        })
-function saveApiKey(){
-  const inp=document.getElementById('apiKeyInput');
-  const k=String(inp?inp.value:'').trim();
-  const st=document.getElementById('apiKeyStatus');
-  if(!k||k.length<10){if(st)st.textContent='Key too short';return;}
-  _apiKey=k;
-  localStorage.setItem('driftjournal_apikey',k);
-  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'...';
-  if(typeof showToast==='function')showToast('API key saved!');
+  if(progressBar) progressBar.style.width='100%';
+  if(progressLabel) progressLabel.textContent='Ready to import '+groupList.length+' trip(s)';
+
+  const saveRow=document.getElementById('bulkSaveRow');
+  if(saveRow) saveRow.style.display='block';
+  const saveLabel=document.getElementById('bulkSaveLabel');
+  if(saveLabel) saveLabel.textContent='Save '+groupList.length+' Trip'+(groupList.length!==1?'s':'');
 }
+
+function saveBulkTrips(){
+  if(!_bulkTrips||!_bulkTrips.length){showToast('No trips to save');return;}
+  _bulkTrips.forEach(function(g){
+    const newTrip={
+      id:Date.now()+Math.random(),
+      title:g.location||(g.date+' Trip'),
+      date:g.date,
+      displayDate:fmtDisplay(g.date),
+      location:g.location||'',
+      state:g.state||'',
+      lat:g.lat||null,
+      lng:g.lng||null,
+      flow:'',water:'',air:'',baro:'',weather:'',
+      moon:getMoonPhase(g.date),
+      notes:'',
+      catches_list:g.catches||[],
+      photos:g.photos||[],
+      bgColor:BG[trips.length%BG.length]
+    };
+    trips.push(newTrip);
+  });
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  renderFeed();
+  closeBulkImport();
+  document.getElementById('statTrips').textContent=trips.length;
+  document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
+  showToast('Imported '+_bulkTrips.length+' trip(s)!');
+  switchTab('vHome','btn-home');
+  _bulkTrips=[];
+}
+
 function saveGeminiKey(){
   const inp=document.getElementById('geminiKeyInput');
-  const k=String(inp?.value||'').trim();
+  const k=String(inp?inp.value:'').trim();
   const status=document.getElementById('geminiKeyStatus');
   if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
   localStorage.setItem('driftjournal_gemini_key',k);
-  if(status)status.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
-  showToast('Gemini key saved!');
+  if(status)status.textContent='\u2713 Saved: '+k.substring(0,12)+'... — fish ID ready!';
+  if(typeof showToast==='function')showToast('Gemini key saved!');
 }
-
+</script>
+<script>
+// Register service worker for PWA offline support
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js')
+      .then(function(reg){ console.log('SW registered:', reg.scope); })
+      .catch(function(err){ console.log('SW registration failed:', err); });
+  });
+}
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferredPrompt = e;
+  const banner = document.getElementById('installBanner');
+  if(banner) banner.style.display = 'flex';
+});
+window.addEventListener('appinstalled', function(){
+  const banner = document.getElementById('installBanner');
+  if(banner) banner.style.display = 'none';
+  deferredPrompt = null;
+});
+function installApp(){
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(){ deferredPrompt=null; });
+  }
+}
+</script>
+</body>
+</html>
