@@ -695,6 +695,32 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:8px">My Gear</div>
     <div class="profile-row"><span>Fly Box</span><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
     <div class="profile-row"><span>Rods &amp; Reels</span><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+    <div class="profile-row" onclick="toggleNetSettings()" style="cursor:pointer">
+      <span>Net</span>
+      <svg id="netChevron" viewBox="0 0 24 24" style="transition:transform .2s"><path d="M9 18l6-6-6-6"/></svg>
+    </div>
+    <div id="netSettings" style="display:none;padding:12px 14px;background:var(--bg);border-top:1px solid rgba(0,0,0,.06);border-radius:0 0 10px 10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Your net mesh size lets the AI estimate fish length more accurately by using the net as a visual reference.</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:600;margin-bottom:5px">Mesh hole size (inches)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="netSizeButtons">
+            <button onclick="setNetSize('0.5')" class="net-size-btn" data-size="0.5" style="padding:6px 12px;border-radius:6px;border:1.5px solid rgba(0,0,0,.15);background:var(--bg);font-size:12px;cursor:pointer;font-family:var(--sans)">½"</button>
+            <button onclick="setNetSize('0.75')" class="net-size-btn" data-size="0.75" style="padding:6px 12px;border-radius:6px;border:1.5px solid rgba(0,0,0,.15);background:var(--bg);font-size:12px;cursor:pointer;font-family:var(--sans)">¾"</button>
+            <button onclick="setNetSize('1')" class="net-size-btn" data-size="1" style="padding:6px 12px;border-radius:6px;border:1.5px solid rgba(0,0,0,.15);background:var(--bg);font-size:12px;cursor:pointer;font-family:var(--sans)">1"</button>
+            <button onclick="setNetSize('1.5')" class="net-size-btn" data-size="1.5" style="padding:6px 12px;border-radius:6px;border:1.5px solid rgba(0,0,0,.15);background:var(--bg);font-size:12px;cursor:pointer;font-family:var(--sans)">1½"</button>
+            <button onclick="setNetSize('custom')" class="net-size-btn" data-size="custom" style="padding:6px 12px;border-radius:6px;border:1.5px solid rgba(0,0,0,.15);background:var(--bg);font-size:12px;cursor:pointer;font-family:var(--sans)">Custom</button>
+          </div>
+          <div id="netCustomInput" style="display:none;margin-top:8px;display:flex;align-items:center;gap:6px">
+            <input id="netCustomSize" type="number" step="0.25" min="0.25" max="4" placeholder="e.g. 1.25"
+              style="width:80px;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 8px;font-size:13px;outline:none;background:var(--bg);color:var(--ink)"
+              oninput="saveNetSize(this.value)"/>
+            <span style="font-size:12px;color:var(--muted)">inches</span>
+          </div>
+        </div>
+      </div>
+      <div id="netSizeStatus" style="font-size:11px;color:var(--teal);min-height:16px"></div>
+    </div>
   </div>
   <div class="profile-section">
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:8px">Settings</div>
@@ -1146,7 +1172,11 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
           role:'user',
           content:[
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-            {type:'text',text:'Identify this fish. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"16.5","confidence":92}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess. Estimate length in inches.'}
+            {type:'text',text:(function(){
+              const netSz=getNetSize();
+              const netHint=netSz?' The fishing net in the image has mesh holes of '+netSz+' inches — use this as a scale reference to estimate the fish length more accurately.':'';
+              return 'Identify this fish. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"16.5","confidence":92}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess. Estimate length in inches based on the fish body from tip of mouth to end of tail.'+netHint;
+            })()}
           ]
         }]
       })
@@ -2488,7 +2518,73 @@ function readFileAsDataUrl(file){
   });
 }
 
-async function saveApiKey(){
+async function toggleNetSettings(){
+  const el=document.getElementById('netSettings');
+  const ch=document.getElementById('netChevron');
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(ch) ch.style.transform=open?'rotate(90deg)':'';
+  if(open) loadNetSettings();
+}
+function loadNetSettings(){
+  const saved=localStorage.getItem('driftjournal_net_size')||'';
+  const status=document.getElementById('netSizeStatus');
+  document.querySelectorAll('.net-size-btn').forEach(function(b){
+    b.style.background='var(--bg)';
+    b.style.borderColor='rgba(0,0,0,.15)';
+    b.style.color='var(--ink)';
+    b.style.fontWeight='400';
+  });
+  if(saved){
+    // Find matching button
+    const btn=document.querySelector('.net-size-btn[data-size="'+saved+'"]');
+    if(btn){
+      btn.style.background='var(--teal)';btn.style.borderColor='var(--teal)';
+      btn.style.color='white';btn.style.fontWeight='600';
+      if(status) status.textContent='✓ Net mesh: '+saved+'" — AI will use this for sizing';
+    } else {
+      // Custom value
+      const customBtn=document.querySelector('.net-size-btn[data-size="custom"]');
+      if(customBtn){customBtn.style.background='var(--teal)';customBtn.style.borderColor='var(--teal)';customBtn.style.color='white';customBtn.style.fontWeight='600';}
+      const customInput=document.getElementById('netCustomInput');
+      if(customInput) customInput.style.display='flex';
+      const customField=document.getElementById('netCustomSize');
+      if(customField) customField.value=saved;
+      if(status) status.textContent='✓ Net mesh: '+saved+'" — AI will use this for sizing';
+    }
+  } else {
+    if(status) status.textContent='Set your net mesh size to improve length estimates';
+  }
+}
+function setNetSize(size){
+  const customInput=document.getElementById('netCustomInput');
+  // Reset all buttons
+  document.querySelectorAll('.net-size-btn').forEach(function(b){
+    b.style.background='var(--bg)';b.style.borderColor='rgba(0,0,0,.15)';
+    b.style.color='var(--ink)';b.style.fontWeight='400';
+  });
+  // Highlight selected
+  const btn=document.querySelector('.net-size-btn[data-size="'+size+'"]');
+  if(btn){btn.style.background='var(--teal)';btn.style.borderColor='var(--teal)';btn.style.color='white';btn.style.fontWeight='600';}
+  if(size==='custom'){
+    if(customInput) customInput.style.display='flex';
+    return;
+  }
+  if(customInput) customInput.style.display='none';
+  saveNetSize(size);
+}
+function saveNetSize(size){
+  if(!size||isNaN(parseFloat(size))) return;
+  const s=String(parseFloat(size));
+  localStorage.setItem('driftjournal_net_size',s);
+  const status=document.getElementById('netSizeStatus');
+  if(status) status.textContent='✓ Net mesh: '+s+'" — AI will use this for sizing';
+  showToast('Net size saved: '+s+'"');
+}
+function getNetSize(){
+  return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;
+}
+function saveApiKey(){
   const inp=document.getElementById('apiKeyInput');
   const k=String(inp?.value||'').trim();
   const status=document.getElementById('apiKeyStatus');
