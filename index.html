@@ -855,7 +855,31 @@ let selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
 let currentEntryIdx=null;
 
 // ══ UTILS ══════════════════════════════════════════════════════
-function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}if(id!=='vEntry')closeEntryMapModal();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
+function showView(id){
+  if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}
+  if(id!=='vEntry')closeEntryMapModal();
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+  // Push state so Android back gesture works within the app
+  history.pushState({view:id},'',location.pathname);
+}
+// Intercept Android back gesture / browser back button
+window.addEventListener('popstate',function(e){
+  const view=e.state&&e.state.view;
+  if(view){
+    // Navigate back within app without pushing new state
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(view).classList.add('active');
+    window.scrollTo(0,0);
+  } else {
+    // Default: go home
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('vHome').classList.add('active');
+    window.scrollTo(0,0);
+    history.pushState({view:'vHome'},'',location.pathname);
+  }
+});
 function switchTab(v,b){showView(v);if(v==='vProfile')loadApiKeyUI();if(v==='vMap')try{onMapTabShown();}catch(e){}if(v==='vProfile')loadApiKeyUI();document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function fmtDisplay(d){const p=d.split('-');return MONTHS[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')+', '+p[0]}
@@ -2517,9 +2541,18 @@ function saveBulkTrips(){
 
 async function autoIdentifyImportedCatches(){
   const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-  if(!geminiKey) return; // no key, skip
-  // Find all trips with unidentified catches (species === 'Unknown') that have photos
+  if(!geminiKey) return;
+  // Count total to identify
+  let total=0;
+  for(let ti=0;ti<trips.length;ti++){
+    const t=trips[ti];
+    if(t.catches_list) for(let ci=0;ci<t.catches_list.length;ci++){
+      if(t.catches_list[ci].species==='Unknown'&&t.catches_list[ci].photo) total++;
+    }
+  }
+  if(!total) return;
   let identified=0;
+  showToast('Identifying 0 / '+total+' fish...');
   for(let ti=0;ti<trips.length;ti++){
     const t=trips[ti];
     if(!t.catches_list) continue;
@@ -2558,16 +2591,18 @@ async function autoIdentifyImportedCatches(){
             trips[ti].catches_list[ci].species=result.species;
             trips[ti].catches_list[ci].length=result.length||'—';
             identified++;
-            // Save after each identification so progress is preserved
             try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+            showToast('Identifying '+identified+' / '+total+' fish...');
           }
         }catch(e){ continue; }
       }
     }
   }
+  renderFeed();
   if(identified>0){
-    renderFeed();
-    showToast(identified+' fish identified!');
+    showToast('Done! '+identified+' / '+total+' fish identified!');
+  } else {
+    showToast('Identifying complete');
   }
 }
 
