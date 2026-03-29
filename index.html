@@ -1097,10 +1097,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
   },3000);
 
   try{
-    const base64=useDataUrl.split(',')[1];
-    const mediaType='image/jpeg';
-
-    // Always read fresh API key from localStorage in case it was set after page load
+    // Check API key first
     const currentApiKey = localStorage.getItem('driftjournal_apikey') || _apiKey || '';
     if(!currentApiKey){
       clearInterval(_aiTickTimer);
@@ -1108,8 +1105,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       return;
     }
 
-    // Resize image to max 1024px and compress to JPEG before sending
-    // API limit is 5MB base64 (~3.75MB raw) — Samsung photos can be 8MB+
+    // Resize image to max 1024px — API limit is 5MB base64
     const resizedDataUrl = await new Promise(function(resolve){
       const img = new Image();
       img.onload = function(){
@@ -1124,10 +1120,12 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
-      img.onerror = function(){ resolve(imageDataUrl); }; // fallback to original
+      img.onerror = function(){ resolve(imageDataUrl); };
       img.src = imageDataUrl;
     });
     const useDataUrl = resizedDataUrl || imageDataUrl;
+    const base64 = useDataUrl.split(',')[1];
+    const mediaType = 'image/jpeg';
 
     const fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
