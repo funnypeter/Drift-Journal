@@ -1160,8 +1160,8 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     // Build prompt using net size if set
     const netSz=getNetSize();
     const prompt=netSz
-      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
-      :'Identify this fish and estimate its length in inches from mouth to tail. Use visible references (hands, net, rod). Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
+      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Output ONLY a JSON object with keys: species, length, confidence. Example: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species must be one of: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
+      :'Identify this fish and estimate length in inches mouth to tail. Output ONLY a JSON object with keys: species, length, confidence. Example: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species must be one of: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
 
     // Gemini only
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
@@ -1181,8 +1181,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
             {inline_data:{mime_type:mediaType,data:base64}},
             {text:prompt}
           ]}],
-          generationConfig:{maxOutputTokens:500,temperature:0.1},
-          thinkingConfig:{thinkingBudget:0}
+          generationConfig:{maxOutputTokens:500,temperature:0,responseMimeType:'application/json'}
         })
       });
     }
