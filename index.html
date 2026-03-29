@@ -1173,7 +1173,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 
     let fetchPromise;
     if(geminiKey){
-      fetchPromise=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+geminiKey,{
+      fetchPromise=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
@@ -1181,7 +1181,8 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
             {inline_data:{mime_type:mediaType,data:base64}},
             {text:prompt}
           ]}],
-          generationConfig:{maxOutputTokens:300,temperature:0.1}
+          generationConfig:{maxOutputTokens:500,temperature:0.1},
+          thinkingConfig:{thinkingBudget:0}
         })
       });
     }
@@ -2571,7 +2572,7 @@ async function handleBulkPhotos(files){
         const mtype='image/jpeg';
         const bulkApiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
         if(!bulkApiKey) continue; // skip AI if no key
-        const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+bulkApiKey,{
+        const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+bulkApiKey,{
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
