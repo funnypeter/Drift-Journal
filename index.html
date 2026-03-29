@@ -2539,10 +2539,27 @@ function saveBulkTrips(){
   setTimeout(function(){ autoIdentifyImportedCatches(); }, 1000);
 }
 
+function showIdentifyProgress(current, total, done){
+  let bar = document.getElementById('identifyProgressBar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'identifyProgressBar';
+    bar.style.cssText = 'position:fixed;bottom:72px;left:0;right:0;z-index:999;background:#1e4d43;color:white;font-size:13px;font-weight:600;font-family:var(--sans);padding:12px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.15)';
+    document.body.appendChild(bar);
+  }
+  if(done){
+    bar.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Done! '+current+' / '+total+' fish identified';
+    setTimeout(function(){ if(bar.parentNode) bar.parentNode.removeChild(bar); }, 3000);
+  } else {
+    const pct = total > 0 ? Math.round((current/total)*100) : 0;
+    bar.innerHTML = '<div style="flex:1"><div style="margin-bottom:4px">Identifying fish... '+current+' / '+total+'</div>'
+      +'<div style="background:rgba(255,255,255,.25);border-radius:4px;height:4px"><div style="background:white;border-radius:4px;height:4px;width:'+pct+'%;transition:width .3s"></div></div></div>';
+  }
+}
+
 async function autoIdentifyImportedCatches(){
   const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
   if(!geminiKey) return;
-  // Count total to identify
   let total=0;
   for(let ti=0;ti<trips.length;ti++){
     const t=trips[ti];
@@ -2552,7 +2569,7 @@ async function autoIdentifyImportedCatches(){
   }
   if(!total) return;
   let identified=0;
-  showToast('Identifying 0 / '+total+' fish...');
+  showIdentifyProgress(0, total, false);
   for(let ti=0;ti<trips.length;ti++){
     const t=trips[ti];
     if(!t.catches_list) continue;
@@ -2592,18 +2609,14 @@ async function autoIdentifyImportedCatches(){
             trips[ti].catches_list[ci].length=result.length||'—';
             identified++;
             try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
-            showToast('Identifying '+identified+' / '+total+' fish...');
+            showIdentifyProgress(identified, total, false);
           }
         }catch(e){ continue; }
       }
     }
   }
   renderFeed();
-  if(identified>0){
-    showToast('Done! '+identified+' / '+total+' fish identified!');
-  } else {
-    showToast('Identifying complete');
-  }
+  showIdentifyProgress(identified, total, true);
 }
 
 function saveGeminiKey(){
