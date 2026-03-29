@@ -1206,19 +1206,23 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     // Handle Gemini response - may have thinking tokens, find the JSON part
     let text='';
     if(data.candidates?.[0]?.content?.parts){
-      // Gemini: get last text part (after any thinking)
       const parts=data.candidates[0].content.parts;
       for(let i=parts.length-1;i>=0;i--){
-        if(parts[i].text){text=parts[i].text;break;}
+        if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}
       }
-    } else {
-      text=data.content?.[0]?.text||'';
     }
-    // Strip markdown, find the JSON object
-    let clean=text.replace(/```json[\s\S]*?```/g,s=>s.replace(/```json|```/g,'')).replace(/```/g,'').trim();
-    // Extract just the JSON object if there's surrounding text
+    // Robustly extract JSON object from any surrounding text/markdown
+    // Handles: ```json {...} ```, json {...}, plain {...}, thinking preamble, etc.
+    let clean=text
+      .replace(/```json/gi,'')  // remove ```json
+      .replace(/```/g,'')       // remove remaining backticks
+      .replace(/^json\s*/i,'')  // remove leading 'json' word
+      .trim();
+    // Extract just the {...} object
     const jsonMatch=clean.match(/\{[\s\S]*\}/);
-    if(jsonMatch) clean=jsonMatch[0];
+    if(!jsonMatch) throw new Error('No JSON object in response: '+clean.substring(0,60));
+    clean=jsonMatch[0];
+  
     const result=JSON.parse(clean);
     // Log result for debugging
     if(result.mesh_holes_counted!==undefined){
