@@ -739,6 +739,17 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
       <div id="apiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
     </div>
     <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">🔮 Gemini API Key</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Used for fish ID &amp; sizing (better vision). Free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--teal)">aistudio.google.com</a></div>
+      <div style="display:flex;gap:8px">
+        <input id="geminiKeyInput" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"
+          onpaste="setTimeout(saveGeminiKey,50)" onchange="saveGeminiKey()"/>
+        <button onclick="saveGeminiKey()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+      </div>
+      <div id="geminiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
+    </div>
+    <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600;margin-bottom:3px">🗺 Mapbox Token</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Free at <a href="https://mapbox.com" target="_blank" style="color:var(--teal)">mapbox.com</a> — enables satellite &amp; outdoor maps</div>
       <div style="display:flex;gap:8px">
@@ -2608,6 +2619,15 @@ function saveNetSize(size){
 function getNetSize(){
   return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;
 }
+function saveGeminiKey(){
+  const inp=document.getElementById('geminiKeyInput');
+  const k=String(inp?.value||'').trim();
+  const status=document.getElementById('geminiKeyStatus');
+  if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
+  localStorage.setItem('driftjournal_gemini_key',k);
+  if(status)status.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
+  showToast('Gemini key saved!');
+}
 function saveApiKey(){
   const inp=document.getElementById('apiKeyInput');
   const k=String(inp?.value||'').trim();
@@ -2633,6 +2653,11 @@ function saveMapboxToken(){
   showToast('Mapbox token saved!');
 }
 function loadApiKeyUI(){
+  const gk=localStorage.getItem('driftjournal_gemini_key')||'';
+  const gkInp=document.getElementById('geminiKeyInput');
+  const gkSt=document.getElementById('geminiKeyStatus');
+  if(gkInp) gkInp.value=gk;
+  if(gkSt) gkSt.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
   const ak=localStorage.getItem('driftjournal_apikey');
   const akInp=document.getElementById('apiKeyInput');
   const akStatus=document.getElementById('apiKeyStatus');
