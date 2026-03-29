@@ -1100,13 +1100,20 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     const base64=imageDataUrl.split(',')[1];
     const mediaType=imageDataUrl.split(';')[0].split(':')[1]||'image/jpeg';
 
+    // Always read fresh API key from localStorage in case it was set after page load
+    const currentApiKey = localStorage.getItem('driftjournal_apikey') || _apiKey || '';
+    if(!currentApiKey){
+      clearInterval(_aiTickTimer);
+      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Anthropic API key in Profile tab to enable fish ID</div></div>';
+      return;
+    }
     const fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
         'anthropic-dangerous-direct-browser-access':'true',
         'anthropic-version':'2023-06-01',
-        ...(_apiKey ? {'x-api-key': _apiKey} : {})
+        'x-api-key': currentApiKey
       },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
@@ -1133,7 +1140,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       let errMsg='API '+response.status;
       try{const e=JSON.parse(errText);errMsg=e.error?.message||errMsg;}catch(e){}
       // If 401 auth error from non-claude.ai, show helpful message
-      if(response.status===401) errMsg='Sign in to claude.ai first, then the AI features will work automatically';
+      if(response.status===401) errMsg='Invalid or missing API key — add your key in Profile tab';
       throw new Error(errMsg);
     }
 
@@ -2308,11 +2315,12 @@ async function handleBulkPhotos(files){
       try{
         const base64=p.dataUrl.split(',')[1];
         const mtype=p.dataUrl.split(';')[0].split(':')[1]||'image/jpeg';
+        const bulkApiKey = localStorage.getItem('driftjournal_apikey') || _apiKey || '';
         const resp=await fetch('https://api.anthropic.com/v1/messages',{
           method:'POST',
           headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true',
               'anthropic-version':'2023-06-01',
-              ...(_apiKey ? {'x-api-key': _apiKey} : {})},
+              ...(bulkApiKey ? {'x-api-key': bulkApiKey} : {})},
           body:JSON.stringify({
             model:'claude-haiku-4-5-20251001',max_tokens:120,
             messages:[{role:'user',content:[
