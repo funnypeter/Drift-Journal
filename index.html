@@ -2258,6 +2258,8 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
   }catch(e){console.log('Storage load error:',e);}
 })();
 // Init on DOM ready
+// Clean up any stale progress bar from previous session
+(function(){const b=document.getElementById('identifyProgressBar');if(b)b.remove();})();
 renderFeed();
 try{renderMap();}catch(e){console.log('map init err:',e.message);}
 document.getElementById('statTrips').textContent=trips.length;
@@ -2539,184 +2541,51 @@ function saveBulkTrips(){
   document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
   const count=_bulkTrips.length;
   _bulkTrips=[];
-  showToast('Imported '+count+' trip(s)! Identifying fish...');
+  showToast('Imported '+count+' trip(s)!');
   switchTab('vHome','btn-home');
-  // Auto-identify all imported catches in the background
-  setTimeout(function(){ autoIdentifyImportedCatches(); }, 1000);
 }
 
-function showIdentifyProgress(current, total, done){
-  let bar = document.getElementById('identifyProgressBar');
-  if(!bar){
-    bar = document.createElement('div');
-    bar.id = 'identifyProgressBar';
-    bar.style.cssText = 'position:fixed;bottom:72px;left:0;right:0;z-index:999;background:#1e4d43;color:white;font-size:13px;font-weight:600;font-family:var(--sans);padding:12px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.15)';
-    document.body.appendChild(bar);
-  }
-  if(done){
-    bar.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Done! '+current+' / '+total+' fish identified';
-    setTimeout(function(){ if(bar.parentNode) bar.parentNode.removeChild(bar); }, 3000);
-  } else {
-    const pct = total > 0 ? Math.round((current/total)*100) : 0;
-    bar.innerHTML = '<div style="flex:1"><div style="margin-bottom:4px">Identifying fish... '+current+' / '+total+'</div>'
-      +'<div style="background:rgba(255,255,255,.25);border-radius:4px;height:4px"><div style="background:white;border-radius:4px;height:4px;width:'+pct+'%;transition:width .3s"></div></div></div>';
-  }
-}
-
-async function autoIdentifyImportedCatches(){
-  const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-  if(!geminiKey) return;
-  let total=0;
-  for(let ti=0;ti<trips.length;ti++){
-    const t=trips[ti];
-    if(t.catches_list) for(let ci=0;ci<t.catches_list.length;ci++){
-      if(t.catches_list[ci].species==='Unknown'&&t.catches_list[ci].photo) total++;
-    }
-  }
-  if(!total) return;
-  let identified=0;
-  showIdentifyProgress(0, total, false);
-  for(let ti=0;ti<trips.length;ti++){
-    const t=trips[ti];
-    if(!t.catches_list) continue;
-    for(let ci=0;ci<t.catches_list.length;ci++){
-      const c=t.catches_list[ci];
-      if(c.species==='Unknown' && c.photo){
-        try{
-          const base64=c.photo.split(',')[1];
-          if(!base64) continue;
-          const netSz=getNetSize();
-          const prompt=netSz
-            ?'You are measuring a fish in a landing net. Each mesh hole is exactly '+netSz+' inches wide. Count holes from mouth to tail and multiply. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
-            :'Identify this fish and estimate length in inches mouth to tail. Do not underestimate. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
-          const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-              contents:[{parts:[
-                {inline_data:{mime_type:'image/jpeg',data:base64}},
-                {text:prompt}
-              ]}],
-              generationConfig:{maxOutputTokens:1024,temperature:0}
-            })
-          });
-          if(!resp.ok){
-            if(resp.status===429){
-              showIdentifyProgress(identified, total, false);
-              await new Promise(r=>setTimeout(r,20000)); // wait 20s on 429
-            }
-            continue;
-          }
-          const data=await resp.json();
-          let text='';
-          const parts=data.candidates?.[0]?.content?.parts||[];
-          for(let i=parts.length-1;i>=0;i--){if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}}
-          let clean=text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-          if(clean.toLowerCase().startsWith('json')) clean=clean.slice(4).trim();
-          const js=clean.indexOf('{'); const je=clean.lastIndexOf('}');
-          if(js<0||je<=js) continue;
-          const result=JSON.parse(clean.substring(js,je+1));
-          if(result.species && result.species!=='Unknown'){
-            trips[ti].catches_list[ci].species=result.species;
-            trips[ti].catches_list[ci].length=result.length||'—';
-            identified++;
-            try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
-            showIdentifyProgress(identified, total, false);
-          }
-        }catch(e){
-          // If rate limited, wait longer before retrying
-          if(e.message && e.message.includes('429')){
-            showIdentifyProgress(identified, total, false);
-            await new Promise(r=>setTimeout(r,15000)); // wait 15s on rate limit
-          }
-          continue;
-        }
-        // Delay between requests to stay under 5 RPM (12s gap = safe)
-        await new Promise(r=>setTimeout(r,12500));
-      }
-    }
-  }
-  renderFeed();
-  showIdentifyProgress(identified, total, true);
-}
-
-function saveGeminiKey(){
-  const inp=document.getElementById('geminiKeyInput');
-  const k=String(inp?inp.value:'').trim();
-  const status=document.getElementById('geminiKeyStatus');
-  if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
-  localStorage.setItem('driftjournal_gemini_key',k);
-  if(status)status.textContent='\u2713 Saved: '+k.substring(0,12)+'... — fish ID ready!';
-  if(typeof showToast==='function')showToast('Gemini key saved!');
-}
 
 function identifyDetailCatch(catchIdx, tripIdx){
-  const e = trips[tripIdx];
+  const e=trips[tripIdx];
   if(!e||!e.catches_list[catchIdx]) return;
-  const c = e.catches_list[catchIdx];
-  if(!c.photo) return;
+  const c=e.catches_list[catchIdx];
+  if(!c.photo){ showToast('No photo to identify'); return; }
 
-  // Find the button and replace with spinner
-  const cards = document.querySelectorAll('.catch-detail-card');
-  const card = cards[catchIdx];
-  const btn = card ? card.querySelector('button[onclick*="identifyDetailCatch"]') : null;
-  if(btn){
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Identifying...';
-  }
+  // Temporarily put this catch photo into newCatches so identifyWithClaude can update it
+  // Save current newCatches state and restore after
+  const savedCatches = newCatches;
+  newCatches = e.catches_list.map(function(catch_item){
+    return {
+      species: catch_item.species||'',
+      fly: catch_item.fly||'',
+      flyCategory: catch_item.flyCategory||'Dry Flies',
+      flySize: catch_item.size||'16',
+      length: catch_item.length||'',
+      time: catch_item.time||'',
+      notes: catch_item.notes||'',
+      photo: catch_item.photo||null,
+      date: catch_item.date||e.date||''
+    };
+  });
 
-  const geminiKey = (localStorage.getItem('driftjournal_gemini_key')||'').trim();
-  if(!geminiKey){
-    if(btn){ btn.disabled=false; btn.innerHTML='Identify Fish'; }
-    showToast('Add Gemini key in Profile first');
-    return;
-  }
-
-  const base64 = c.photo.split(',')[1];
-  if(!base64){ if(btn){btn.disabled=false;} return; }
-
-  const netSz = getNetSize();
-  const prompt = netSz
-    ? 'You are measuring a fish in a landing net. Each mesh hole is exactly '+netSz+' inches wide. Count holes from mouth to tail and multiply. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
-    : 'Identify this fish and estimate length in inches mouth to tail. Do not underestimate. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
-
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      contents:[{parts:[
-        {inline_data:{mime_type:'image/jpeg',data:base64}},
-        {text:prompt}
-      ]}],
-      generationConfig:{maxOutputTokens:1024,temperature:0}
-    })
-  })
-  .then(r=>r.json())
-  .then(function(data){
-    let text='';
-    const parts=data.candidates?.[0]?.content?.parts||[];
-    for(let i=parts.length-1;i>=0;i--){if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}}
-    let clean=text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    if(clean.toLowerCase().startsWith('json')) clean=clean.slice(4).trim();
-    const js=clean.indexOf('{'); const je=clean.lastIndexOf('}');
-    if(js<0||je<=js) throw new Error('No JSON: '+clean.substring(0,40));
-    const result=JSON.parse(clean.substring(js,je+1));
-    if(!result.species) throw new Error('No species in response');
-
-    // Update the trip data
-    trips[tripIdx].catches_list[catchIdx].species = result.species;
-    trips[tripIdx].catches_list[catchIdx].length = result.length||'—';
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
-
-    // Refresh the entry detail view
-    openEntry(tripIdx);
-    showToast(result.species+' · '+result.length+'"');
-  })
-  .catch(function(err){
-    if(btn){ btn.disabled=false; btn.innerHTML='Identify Fish'; }
-    showToast('Error: '+err.message.substring(0,50));
+  // After identification completes, save back to the trip and refresh entry view
+  const origIdentify = identifyWithClaude;
+  identifyWithClaude(c.photo, catchIdx).then(function(){
+    // Copy identified data back to trip
+    if(newCatches[catchIdx]){
+      trips[tripIdx].catches_list[catchIdx].species = newCatches[catchIdx].species || c.species;
+      trips[tripIdx].catches_list[catchIdx].length = newCatches[catchIdx].length || c.length;
+    }
+    newCatches = savedCatches;
+    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e2){}
+    // Refresh the entry view after a short delay to show result
+    setTimeout(function(){ openEntry(tripIdx); }, 500);
+  }).catch(function(){
+    newCatches = savedCatches;
   });
 }
+
 
 </script>
 <script>
