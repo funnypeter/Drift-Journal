@@ -2319,7 +2319,81 @@ function loadApiKeyUI(){
   const mt=localStorage.getItem('driftjournal_mapbox_token')||'';
   const mi=document.getElementById('mapboxTokenInput');if(mi)mi.value=mt;
   const ms=document.getElementById('mapboxTokenStatus');if(ms)ms.textContent=mt?'✓ Token active':'';
-}</script>
+}
+function openBulkImport(){
+  document.getElementById('bulkImportModal').style.display='flex';
+  document.body.style.overflow='hidden';
+  document.getElementById('bulkStep1').style.display='block';
+  document.getElementById('bulkStep2').style.display='none';
+  document.getElementById('bulkFileInput').value='';
+  document.getElementById('bulkPreviewList').innerHTML='';
+  document.getElementById('bulkPhotoCount').textContent='0';
+}
+function closeBulkImport(){
+  document.getElementById('bulkImportModal').style.display='none';
+  document.body.style.overflow='';
+}
+async function startBulkImport(){
+  const files=document.getElementById('bulkFileInput').files;
+  if(!files||!files.length){showToast('Select photos first');return;}
+  document.getElementById('bulkStep1').style.display='none';
+  document.getElementById('bulkStep2').style.display='block';
+  const list=document.getElementById('bulkPreviewList');
+  list.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Processing '+files.length+' photos...</div>';
+  
+  const groups={};
+  for(const f of files){
+    const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(f);});
+    // Try to get date from EXIF or filename
+    let date=new Date().toISOString().split('T')[0];
+    try{
+      const yr=f.name.match(/20\d{2}/);
+      if(yr){
+        const m=f.name.match(/20(\d{2})(\d{2})(\d{2})/);
+        if(m) date=`20${m[1]}-${m[2]}-${m[3]}`;
+      }
+    }catch(e){}
+    if(!groups[date]) groups[date]={date,photos:[],catches:[]};
+    groups[date].photos.push({dataUrl,name:f.name});
+  }
+  
+  list.innerHTML='';
+  Object.values(groups).forEach(g=>{
+    const div=document.createElement('div');
+    div.style.cssText='padding:12px;border:1px solid rgba(0,0,0,.1);border-radius:8px;margin-bottom:8px';
+    div.innerHTML='<div style="font-weight:600;margin-bottom:4px">'+g.date+'</div><div style="font-size:12px;color:var(--muted)">'+g.photos.length+' photo(s)</div>';
+    list.appendChild(div);
+  });
+  
+  document.getElementById('bulkSaveBtn').onclick=function(){saveBulkTrips(groups);};
+}
+async function saveBulkTrips(groups){
+  const entries=Object.values(groups);
+  for(const g of entries){
+    const tripPhotos=g.photos.map(p=>p.dataUrl);
+    const newTrip={
+      id:Date.now()+Math.random(),
+      title:'Imported Trip',
+      date:g.date,
+      displayDate:fmtDisplay(g.date),
+      location:'',state:'',lat:null,lng:null,
+      flow:'',water:'',air:'',baro:'',weather:'',
+      moon:getMoonPhase(g.date),
+      notes:'',
+      catches_list:[],
+      photos:tripPhotos,
+      bgColor:BG[trips.length%BG.length]
+    };
+    trips.push(newTrip);
+  }
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  renderFeed();
+  closeBulkImport();
+  showToast('Imported '+entries.length+' trip(s)!');
+  switchTab('vHome','btn-home');
+}
+
+</script>
 <script>
 // ══ BULK PHOTO IMPORT ══════════════════════════════════════════════════════
 let _bulkTrips = []; // grouped trip data before saving
@@ -2600,7 +2674,8 @@ async function handleBulkPhotos(files){
             ]}],
             generationConfig:{maxOutputTokens:120,temperature:0.1}
           })
-        })function saveApiKey(){
+        })
+function saveApiKey(){
   const inp=document.getElementById('apiKeyInput');
   const k=String(inp?inp.value:'').trim();
   const st=document.getElementById('apiKeyStatus');
