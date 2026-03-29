@@ -1105,6 +1105,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       headers:{
         'Content-Type':'application/json',
         'anthropic-dangerous-direct-browser-access':'true',
+        'anthropic-version':'2023-06-01',
         ...(_apiKey ? {'x-api-key': _apiKey} : {})
       },
       body:JSON.stringify({
@@ -2309,7 +2310,9 @@ async function handleBulkPhotos(files){
         const mtype=p.dataUrl.split(';')[0].split(':')[1]||'image/jpeg';
         const resp=await fetch('https://api.anthropic.com/v1/messages',{
           method:'POST',
-          headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+          headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true',
+              'anthropic-version':'2023-06-01',
+              ...(_apiKey ? {'x-api-key': _apiKey} : {})},
           body:JSON.stringify({
             model:'claude-haiku-4-5-20251001',max_tokens:120,
             messages:[{role:'user',content:[
