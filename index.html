@@ -857,36 +857,8 @@ let currentEntryIdx=null;
 function showView(id){if(id!=='vEntry'&&window._miniMap){window._miniMap.remove();window._miniMap=null;}if(id!=='vEntry')closeEntryMapModal();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
 function switchTab(v,b){showView(v);if(v==='vProfile')loadApiKeyUI();if(v==='vProfile')loadApiKeyUI();document.querySelectorAll('.bnav-item,.bnav-log-wrap').forEach(x=>x.classList.remove('active'));const btn=document.getElementById(b);if(btn)btn.classList.add('active')}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
-function saveGeminiKey(){
-  const inp=document.getElementById('geminiKeyInput');
-  const k=String(inp?.value||'').trim();
-  const status=document.getElementById('geminiKeyStatus');
-  if(!k||k.length<10){if(status)status.textContent='Key too short — paste full key';return;}
   localStorage.setItem('driftjournal_gemini_key',k);
   if(status)status.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
-  showToast('Gemini key saved!');
-}
-function saveMapboxToken(){
-  const t=document.getElementById('mapboxTokenInput')?.value.trim();
-  const status=document.getElementById('mapboxTokenStatus');
-  if(!t){if(status)status.textContent='Please enter a token';return;}
-  localStorage.setItem('driftjournal_mapbox_token',t);
-  if(typeof mapboxgl!=='undefined') mapboxgl.accessToken=t;
-  if(status)status.textContent='✓ Saved — reload to activate maps';
-  showToast('Mapbox token saved!');
-}
-function loadApiKeyUI(){
-  const gk=localStorage.getItem('driftjournal_gemini_key')||'';
-  const gkInp=document.getElementById('geminiKeyInput');
-  const gkSt=document.getElementById('geminiKeyStatus');
-  if(gkInp) gkInp.value=gk;
-  if(gkSt) gkSt.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
-  const mbt=localStorage.getItem('driftjournal_mapbox_token')||'';
-  const mbtInp=document.getElementById('mapboxTokenInput');
-  const mbtSt=document.getElementById('mapboxTokenStatus');
-  if(mbtInp) mbtInp.value=mbt;
-  if(mbtSt) mbtSt.textContent=mbt?'✓ Token active':'';
-}
 
 function fmtDisplay(d){const p=d.split('-');return MONTHS[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')+', '+p[0]}
 function fmtShort(d){const p=d.split('-');return MONTHS_SHORT[+p[1]-1]+' '+String(+p[2]).padStart(2,'0')}
@@ -2222,7 +2194,82 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
 renderFeed();renderMap();
 document.getElementById('statTrips').textContent=trips.length;
 document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
-</script>
+
+function getNetSize(){return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;}
+function saveNetSize(size){
+  if(!size||isNaN(parseFloat(size)))return;
+  const s=String(parseFloat(size));
+  localStorage.setItem('driftjournal_net_size',s);
+  const el=document.getElementById('netSizeStatus');
+  if(el)el.textContent='✓ Net mesh: '+s+'"';
+  if(typeof showToast==='function')showToast('Net size: '+s+'"');
+}
+function setNetSize(size){
+  document.querySelectorAll('.net-size-btn').forEach(function(b){
+    b.style.background='var(--bg)';b.style.borderColor='rgba(0,0,0,.15)';
+    b.style.color='var(--ink)';b.style.fontWeight='400';
+  });
+  const btn=document.querySelector('.net-size-btn[data-size="'+size+'"]');
+  if(btn){btn.style.background='#1e4d43';btn.style.borderColor='#1e4d43';btn.style.color='white';btn.style.fontWeight='600';}
+  const ci=document.getElementById('netCustomInput');
+  if(size==='custom'){if(ci)ci.style.display='flex';return;}
+  if(ci)ci.style.display='none';
+  saveNetSize(size);
+}
+function loadNetSettings(){
+  const saved=localStorage.getItem('driftjournal_net_size')||'';
+  document.querySelectorAll('.net-size-btn').forEach(function(b){
+    b.style.background='var(--bg)';b.style.borderColor='rgba(0,0,0,.15)';
+    b.style.color='var(--ink)';b.style.fontWeight='400';
+  });
+  if(saved){
+    const btn=document.querySelector('.net-size-btn[data-size="'+saved+'"]');
+    if(btn){btn.style.background='#1e4d43';btn.style.borderColor='#1e4d43';btn.style.color='white';btn.style.fontWeight='600';}
+    else{
+      const cb=document.querySelector('.net-size-btn[data-size="custom"]');
+      if(cb){cb.style.background='#1e4d43';cb.style.borderColor='#1e4d43';cb.style.color='white';cb.style.fontWeight='600';}
+      const ci=document.getElementById('netCustomInput');if(ci)ci.style.display='flex';
+      const cf=document.getElementById('netCustomSize');if(cf)cf.value=saved;
+    }
+    const st=document.getElementById('netSizeStatus');
+    if(st)st.textContent='✓ Net mesh: '+saved+'"';
+  }
+}
+function toggleNetSettings(){
+  const el=document.getElementById('netSettings');
+  const ch=document.getElementById('netChevron');
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(ch)ch.style.transform=open?'rotate(90deg)':'';
+  if(open)loadNetSettings();
+}
+function saveGeminiKey(){
+  const inp=document.getElementById('geminiKeyInput');
+  const k=String(inp?inp.value:'').trim();
+  const st=document.getElementById('geminiKeyStatus');
+  if(!k||k.length<10){if(st)st.textContent='Key too short — paste full key';return;}
+  localStorage.setItem('driftjournal_gemini_key',k);
+  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'... — fish ID ready!';
+  if(typeof showToast==='function')showToast('Gemini key saved!');
+}
+function saveMapboxToken(){
+  const inp=document.getElementById('mapboxTokenInput');
+  const t=inp?inp.value.trim():'';
+  const st=document.getElementById('mapboxTokenStatus');
+  if(!t){if(st)st.textContent='Please enter a token';return;}
+  localStorage.setItem('driftjournal_mapbox_token',t);
+  if(typeof mapboxgl!=='undefined')mapboxgl.accessToken=t;
+  if(st)st.textContent='✓ Token saved';
+  if(typeof showToast==='function')showToast('Mapbox token saved!');
+}
+function loadApiKeyUI(){
+  const gk=localStorage.getItem('driftjournal_gemini_key')||'';
+  const gi=document.getElementById('geminiKeyInput');if(gi)gi.value=gk;
+  const gs=document.getElementById('geminiKeyStatus');if(gs)gs.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
+  const mt=localStorage.getItem('driftjournal_mapbox_token')||'';
+  const mi=document.getElementById('mapboxTokenInput');if(mi)mi.value=mt;
+  const ms=document.getElementById('mapboxTokenStatus');if(ms)ms.textContent=mt?'✓ Token active':'';
+}</script>
 <script>
 // ══ BULK PHOTO IMPORT ══════════════════════════════════════════════════════
 let _bulkTrips = []; // grouped trip data before saving
