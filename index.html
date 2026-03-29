@@ -1631,6 +1631,26 @@ function startNewEntry(){
 }
 
 // ══ FIX 3: SAVE (was sealEntry) ════════════════════════════════
+function getMoonPhase(dateStr){
+  // Calculate moon phase from date string (YYYY-MM-DD)
+  const date = dateStr ? new Date(dateStr) : new Date();
+  // Known new moon: Jan 6, 2000
+  const known = new Date(2000, 0, 6);
+  const msPerDay = 86400000;
+  const daysSince = (date - known) / msPerDay;
+  const cycle = 29.53058867; // synodic month in days
+  const phase = ((daysSince % cycle) + cycle) % cycle; // 0-29.53
+  // Map to emoji
+  if(phase < 1.85) return '🌑'; // new moon
+  if(phase < 5.54) return '🌒'; // waxing crescent
+  if(phase < 9.22) return '🌓'; // first quarter
+  if(phase < 12.91) return '🌔'; // waxing gibbous
+  if(phase < 16.61) return '🌕'; // full moon
+  if(phase < 20.30) return '🌖'; // waning gibbous
+  if(phase < 23.99) return '🌗'; // last quarter
+  if(phase < 27.68) return '🌘'; // waning crescent
+  return '🌑'; // new moon
+}
 function sealEntry(){
   const title=document.getElementById('logTitle').value.trim()||selectedLocation.name+' Trip';
   const date=document.getElementById('logDate').value||new Date().toISOString().split('T')[0];
@@ -1639,7 +1659,7 @@ function sealEntry(){
   const notes=document.getElementById('logJournal').value||'';
   const catches_list=newCatches.map(c=>({species:c.species||'Unknown',fly:c.fly||'—',size:c.flySize,length:c.length||'—',time:c.time||'—',photo:c.photo||null}));
   const tripPhotos=newCatches.filter(c=>c.photo).map(c=>c.photo);
-  const newTrip={id:Date.now(),title,date,displayDate:fmtDisplay(date),location:selectedLocation.name,state:selectedLocation.state||'',lat:selectedLocation.lat,lng:selectedLocation.lng,flow,water,air:document.getElementById('logAirTemp').value,baro:document.getElementById('logBaro').value,weather:document.getElementById('logWeather').value,moon:'🌔',notes,catches_list,photos:tripPhotos,bgColor:BG[trips.length%BG.length]};
+  const newTrip={id:Date.now(),title,date,displayDate:fmtDisplay(date),location:selectedLocation.name,state:selectedLocation.state||'',lat:selectedLocation.lat,lng:selectedLocation.lng,flow,water,air:document.getElementById('logAirTemp').value,baro:document.getElementById('logBaro').value,weather:document.getElementById('logWeather').value,moon:getMoonPhase(date),notes,catches_list,photos:tripPhotos,bgColor:BG[trips.length%BG.length]};
   trips.push(newTrip);renderFeed();try{renderMap();}catch(e){console.log("map err",e.message);}
   newCatches=[];selectedLocation={name:"",lat:null,lng:null,state:"",usgsId:null};
   // Persist to localStorage
