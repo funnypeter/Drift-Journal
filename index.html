@@ -731,8 +731,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:10px">Maps &amp; AI</div>
 
     <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">🤖 Anthropic API Key</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Enables AI fish ID. Get a free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--teal)">console.anthropic.com</a></div>
+      <div style="display:flex;gap:8px">
+        <input id="apiKeyInput" type="text" placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"
+          onpaste="setTimeout(saveApiKey,50)" onchange="saveApiKey()"/>
+        <button onclick="saveApiKey()" style="background:var(--teal);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+      </div>
+      <div id="apiKeyStatus" style="font-size:11px;color:var(--teal);margin-top:6px;min-height:16px"></div>
+    </div>
+    <div style="background:var(--surface);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600;margin-bottom:3px">🔮 Gemini API Key</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Used for fish ID &amp; sizing (better vision). Free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--teal)">aistudio.google.com</a></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Better fish sizing via vision. Free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--teal)">aistudio.google.com</a></div>
       <div style="display:flex;gap:8px">
         <input id="geminiKeyInput" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;outline:none;background:var(--bg);color:var(--ink)"
@@ -805,6 +816,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   }catch(e){}
 })();
 // Mapbox token
+let _apiKey=localStorage.getItem('driftjournal_apikey')||'';
 const MAPBOX_TOKEN = localStorage.getItem('driftjournal_mapbox_token') || 'pk.eyJ1IjoiZnVubnlwZXRlciIsImEiOiJjbW5hcHoxd2owbnM4MnhwcDQ5NHR1em52In0.NZO2axyT1gGDwM4H3NsOpA';
 if(typeof mapboxgl !== 'undefined') mapboxgl.accessToken = MAPBOX_TOKEN;
 // ══ LOCATION DB ═══════════════════════════════════════════════
@@ -1159,31 +1171,56 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     const base64 = useDataUrl.split(',')[1];
     const mediaType = 'image/jpeg';
 
-    // Build prompt
+    // Build prompt using net size if set
     const netSz=getNetSize();
     const prompt=netSz
       ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.'
       :'Identify this fish and estimate its length in inches from mouth to tail. Use visible references (hands, net, rod). Reply ONLY with JSON: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
 
-    // Gemini only
+    // Gemini if key set, else Anthropic
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-    if(!geminiKey){
+    const freshKey=localStorage.getItem('driftjournal_apikey')||'';
+    if(freshKey)_apiKey=freshKey;
+    const currentApiKey=(freshKey||_apiKey||'').trim();
+
+    if(!geminiKey&&!currentApiKey){
       clearInterval(_aiTickTimer);
-      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Gemini API key in Profile → Maps & AI to enable fish ID</div></div>';
+      aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your API key in Profile → Maps & AI to enable fish ID</div></div>';
       return;
     }
 
-    const fetchPromise=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        contents:[{parts:[
-          {inline_data:{mime_type:mediaType,data:base64}},
-          {text:prompt}
-        ]}],
-        generationConfig:{maxOutputTokens:200,temperature:0.1}
-      })
-    });
+    let fetchPromise;
+    if(geminiKey){
+      fetchPromise=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[
+            {inline_data:{mime_type:mediaType,data:base64}},
+            {text:prompt}
+          ]}],
+          generationConfig:{maxOutputTokens:200,temperature:0.1}
+        })
+      });
+    } else {
+      fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'anthropic-dangerous-direct-browser-access':'true',
+          'anthropic-version':'2023-06-01',
+          'x-api-key':currentApiKey
+        },
+        body:JSON.stringify({
+          model:'claude-haiku-4-5-20251001',
+          max_tokens:200,
+          messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+            {type:'text',text:prompt}
+          ]}]
+        })
+      });
+    }
 
     const timeoutPromise=new Promise(function(_,reject){
       setTimeout(function(){reject(new Error('timeout'));},30000);
@@ -2191,7 +2228,9 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
     }
   }catch(e){console.log('Storage load error:',e);}
 })();
-renderFeed();renderMap();
+// Init on DOM ready
+renderFeed();
+try{renderMap();}catch(e){console.log('map init err:',e.message);}
 document.getElementById('statTrips').textContent=trips.length;
 document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
 
@@ -2243,6 +2282,16 @@ function toggleNetSettings(){
   if(ch)ch.style.transform=open?'rotate(90deg)':'';
   if(open)loadNetSettings();
 }
+function saveApiKey(){
+  const inp=document.getElementById('apiKeyInput');
+  const k=String(inp?inp.value:'').trim();
+  const st=document.getElementById('apiKeyStatus');
+  if(!k||k.length<10){if(st)st.textContent='Key too short';return;}
+  _apiKey=k;
+  localStorage.setItem('driftjournal_apikey',k);
+  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'...';
+  if(typeof showToast==='function')showToast('API key saved!');
+}
 function saveGeminiKey(){
   const inp=document.getElementById('geminiKeyInput');
   const k=String(inp?inp.value:'').trim();
@@ -2263,6 +2312,9 @@ function saveMapboxToken(){
   if(typeof showToast==='function')showToast('Mapbox token saved!');
 }
 function loadApiKeyUI(){
+  const ak=localStorage.getItem('driftjournal_apikey')||'';
+  const ai=document.getElementById('apiKeyInput');if(ai)ai.value=ak;
+  const as=document.getElementById('apiKeyStatus');if(as)as.textContent=ak?'✓ Active: '+ak.substring(0,12)+'...':'';
   const gk=localStorage.getItem('driftjournal_gemini_key')||'';
   const gi=document.getElementById('geminiKeyInput');if(gi)gi.value=gk;
   const gs=document.getElementById('geminiKeyStatus');if(gs)gs.textContent=gk?'✓ Active: '+gk.substring(0,12)+'...':'';
@@ -2274,6 +2326,16 @@ function loadApiKeyUI(){
 // ══ BULK PHOTO IMPORT ══════════════════════════════════════════════════════
 let _bulkTrips = []; // grouped trip data before saving
 
+function saveApiKey(){
+  const inp=document.getElementById('apiKeyInput');
+  const k=String(inp?inp.value:'').trim();
+  const st=document.getElementById('apiKeyStatus');
+  if(!k||k.length<10){if(st)st.textContent='Key too short';return;}
+  _apiKey=k;
+  localStorage.setItem('driftjournal_apikey',k);
+  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'...';
+  if(typeof showToast==='function')showToast('API key saved!');
+}
 function saveGeminiKey(){
   const inp=document.getElementById('geminiKeyInput');
   const k=String(inp?.value||'').trim();
@@ -2551,7 +2613,17 @@ async function handleBulkPhotos(files){
             ]}],
             generationConfig:{maxOutputTokens:120,temperature:0.1}
           })
-        })function saveGeminiKey(){
+        })function saveApiKey(){
+  const inp=document.getElementById('apiKeyInput');
+  const k=String(inp?inp.value:'').trim();
+  const st=document.getElementById('apiKeyStatus');
+  if(!k||k.length<10){if(st)st.textContent='Key too short';return;}
+  _apiKey=k;
+  localStorage.setItem('driftjournal_apikey',k);
+  if(st)st.textContent='✓ Saved: '+k.substring(0,12)+'...';
+  if(typeof showToast==='function')showToast('API key saved!');
+}
+function saveGeminiKey(){
   const inp=document.getElementById('geminiKeyInput');
   const k=String(inp?.value||'').trim();
   const status=document.getElementById('geminiKeyStatus');
