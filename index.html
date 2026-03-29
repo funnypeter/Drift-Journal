@@ -2480,6 +2480,10 @@ async function handleBulkPhotos(files){
 function saveBulkTrips(){
   if(!_bulkTrips||!_bulkTrips.length){showToast('No trips to save');return;}
   _bulkTrips.forEach(function(g){
+    // Convert each photo into a catch entry so it shows in the Catch Gallery
+    const catches_list=(g.catches&&g.catches.length)?g.catches:g.photos.map(function(photo){
+      return {species:'Unknown',fly:'—',size:'16',length:'—',time:'—',notes:'',photo:photo};
+    });
     const newTrip={
       id:Date.now()+Math.random(),
       title:g.location||(g.date+' Trip'),
@@ -2492,7 +2496,7 @@ function saveBulkTrips(){
       flow:'',water:'',air:'',baro:'',weather:'',
       moon:getMoonPhase(g.date),
       notes:'',
-      catches_list:g.catches||[],
+      catches_list:catches_list,
       photos:g.photos||[],
       bgColor:BG[trips.length%BG.length]
     };
@@ -2503,9 +2507,10 @@ function saveBulkTrips(){
   closeBulkImport();
   document.getElementById('statTrips').textContent=trips.length;
   document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
-  showToast('Imported '+_bulkTrips.length+' trip(s)!');
-  switchTab('vHome','btn-home');
+  const count=_bulkTrips.length;
   _bulkTrips=[];
+  showToast('Imported '+count+' trip(s)! Tap a catch to ID the fish.');
+  switchTab('vHome','btn-home');
 }
 
 function saveGeminiKey(){
