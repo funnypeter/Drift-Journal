@@ -1097,8 +1097,8 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
   },3000);
 
   try{
-    const base64=imageDataUrl.split(',')[1];
-    const mediaType=imageDataUrl.split(';')[0].split(':')[1]||'image/jpeg';
+    const base64=useDataUrl.split(',')[1];
+    const mediaType='image/jpeg';
 
     // Always read fresh API key from localStorage in case it was set after page load
     const currentApiKey = localStorage.getItem('driftjournal_apikey') || _apiKey || '';
@@ -1107,6 +1107,28 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
       aiStrip.innerHTML='<div class="ai-result-strip" style="background:rgba(0,0,0,.03)"><div class="ai-result-strip-text" style="color:var(--muted)">Add your Anthropic API key in Profile tab to enable fish ID</div></div>';
       return;
     }
+
+    // Resize image to max 1024px and compress to JPEG before sending
+    // API limit is 5MB base64 (~3.75MB raw) — Samsung photos can be 8MB+
+    const resizedDataUrl = await new Promise(function(resolve){
+      const img = new Image();
+      img.onload = function(){
+        const MAX = 1024;
+        let w = img.width, h = img.height;
+        if(w > MAX || h > MAX){
+          if(w > h){ h = Math.round(h * MAX/w); w = MAX; }
+          else { w = Math.round(w * MAX/h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = function(){ resolve(imageDataUrl); }; // fallback to original
+      img.src = imageDataUrl;
+    });
+    const useDataUrl = resizedDataUrl || imageDataUrl;
+
     const fetchPromise=fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
@@ -2313,8 +2335,18 @@ async function handleBulkPhotos(files){
       const p=g.photos[j];
       document.getElementById('bulkProgressBar').style.width=(85+((i*g.photos.length+j)/(photoData.length))*15)+'%';
       try{
-        const base64=p.dataUrl.split(',')[1];
-        const mtype=p.dataUrl.split(';')[0].split(':')[1]||'image/jpeg';
+        // Resize bulk photo before AI call
+        const resized = await new Promise(function(res){
+          const im=new Image(); im.onload=function(){
+            const M=1024; let w=im.width,h=im.height;
+            if(w>M||h>M){if(w>h){h=Math.round(h*M/w);w=M;}else{w=Math.round(w*M/h);h=M;}}
+            const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+            cv.getContext('2d').drawImage(im,0,0,w,h);
+            res(cv.toDataURL('image/jpeg',0.82));
+          }; im.onerror=function(){res(p.dataUrl);}; im.src=p.dataUrl;
+        });
+        const base64=resized.split(',')[1];
+        const mtype='image/jpeg';
         const bulkApiKey = localStorage.getItem('driftjournal_apikey') || _apiKey || '';
         const resp=await fetch('https://api.anthropic.com/v1/messages',{
           method:'POST',
