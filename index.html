@@ -1160,8 +1160,8 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     // Build prompt using net size if set
     const netSz=getNetSize();
     const prompt=netSz
-      ?'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species. Output ONLY a JSON object with keys: species, length, confidence. Example: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species must be one of: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
-      :'Identify this fish and estimate length in inches mouth to tail. Output ONLY a JSON object with keys: species, length, confidence. Example: {"species":"Rainbow Trout","length":"12.5","confidence":85}. Species must be one of: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
+      ?'You are measuring a fish in a landing net. Each mesh hole in this net is exactly '+netSz+' inches wide. To estimate length: count how many mesh holes span the fish from the tip of its mouth to the end of its tail, then multiply by '+netSz+'. Be precise and do not underestimate — trout appear smaller than they are when curved. Also identify the species. Output ONLY a JSON object: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
+      :'Identify this fish and carefully estimate its length in inches from tip of mouth to end of tail. Do not underestimate — fish appear smaller in photos. Use any visible reference (hands, net, rod) to calibrate your estimate. Output ONLY a JSON object: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
 
     // Gemini only
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
