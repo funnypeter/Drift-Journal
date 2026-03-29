@@ -1174,8 +1174,10 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
             {type:'text',text:(function(){
               const netSz=getNetSize();
-              const netHint=netSz?' The fishing net in the image has mesh holes of '+netSz+' inches — use this as a scale reference to estimate the fish length more accurately.':'';
-              return 'Identify this fish. Reply ONLY with JSON: {"species":"Rainbow Trout","length":"16.5","confidence":92}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess. Estimate length in inches based on the fish body from tip of mouth to end of tail.'+netHint;
+              if(netSz){
+                return 'If the holes on the bottom of the net are '+netSz+' inches, how big is this fish? Identify the species too. Reply ONLY with JSON: {\"species\":\"Rainbow Trout\",\"length\":\"12.5\",\"confidence\":85}. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
+              }
+              return 'Identify this fish and estimate its length in inches from mouth tip to tail end. Use any visible reference (hands, net, rod). Reply ONLY with JSON: {\"species\":\"Rainbow Trout\",\"length\":\"12.5\",\"confidence\":85}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling, or best guess.';
             })()}
           ]
         }]
@@ -1202,6 +1204,10 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     const text=data.content?.[0]?.text||'';
     const clean=text.replace(/```json|```/g,'').trim();
     const result=JSON.parse(clean);
+    // Log mesh counting result for debugging
+    if(result.mesh_holes_counted!==undefined){
+      console.log('Mesh holes counted:',result.mesh_holes_counted,'× '+getNetSize()+'" =',result.length+'"');
+    }
 
     // Update catch data
     newCatches[catchIdx].species=result.species||newCatches[catchIdx].species;
@@ -1225,9 +1231,10 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     const lengthInput=card.querySelector('.catch-field input[placeholder="18.5"]')||card.querySelector('.catch-field input[placeholder="—"]');
     if(lengthInput) lengthInput.value=result.length||'';
 
+    const meshNote=result.mesh_holes_counted>0?' ('+result.mesh_holes_counted+' mesh holes × '+getNetSize()+'")'  :'';
     aiStrip.innerHTML='<div class="ai-result-strip">'+
       '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'+
-      '<div class="ai-result-strip-text"><strong>'+result.species+'</strong> · est. <strong>'+(result.length||'?')+'"</strong> · '+result.confidence+'% confidence</div>'+
+      '<div class="ai-result-strip-text"><strong>'+result.species+'</strong> · est. <strong>'+(result.length||'?')+'"</strong>'+meshNote+' · '+result.confidence+'% confidence</div>'+
       '</div>';
     showToast('Claude identified: '+result.species);
 
