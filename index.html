@@ -2371,15 +2371,80 @@ async function handleBulkPhotos(files){
 
     const dataUrl=await readFileAsDataUrl(file);
 
-    // Extract date from filename - handles IMG_20231014, PXL_20231014, 20231014, etc.
+    // Extract date: try EXIF first, then filename, then file.lastModified
     let dateStr=new Date().toISOString().split('T')[0];
-    // Match 8-digit date block like 20231014 (year 2000-2099, valid month 01-12, valid day 01-31)
-    const dm=file.name.match(/20(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
-    if(dm) dateStr='20'+dm[1]+'-'+dm[2]+'-'+dm[3];
-    // Also try file.lastModified as fallback
-    else if(file.lastModified){
+    try {
+      // Read EXIF DateTimeOriginal (tag 0x9003) from the file buffer
+      const buf = await file.slice(0, 65536).arrayBuffer();
+      const view = new DataView(buf);
+      const bytes = new Uint8Array(buf);
+      // Check JPEG: starts with FFD8
+      if(bytes[0]===0xFF && bytes[1]===0xD8) {
+        let off=2;
+        while(off < buf.byteLength - 4) {
+          const mk=view.getUint16(off);
+          if(mk===0xFFDA) break;
+          if(mk===0xFFE1) {
+            const segLen=view.getUint16(off+2);
+            if(view.getUint32(off+4)===0x45786966) { // Exif
+              const base=off+10;
+              const be=view.getUint16(base)===0x4D4D;
+              const u16=(o)=>be?view.getUint16(base+o):view.getUint16(base+o,true);
+              const u32=(o)=>be?view.getUint32(base+o):view.getUint32(base+o,true);
+              const ifd=u32(4);
+              const n=u16(ifd);
+              let exifOff=null;
+              for(let i=0;i<n&&i<50;i++){
+                const ep=ifd+2+i*12;
+                if(ep+12>buf.byteLength) break;
+                const tag=u16(ep);
+                if(tag===0x9003){ // DateTimeOriginal
+                  const vo=u32(ep+8);
+                  let s='';
+                  for(let c=0;c<19;c++) s+=String.fromCharCode(view.getUint8(base+vo+c));
+                  // Format: "2023:10:14 14:52:44"
+                  const dp=s.match(/(\d{4}):(\d{2}):(\d{2})/);
+                  if(dp) dateStr=dp[1]+'-'+dp[2]+'-'+dp[3];
+                  break;
+                }
+                if(tag===0x8769) exifOff=u32(ep+8);
+              }
+              // Also check Exif sub-IFD for DateTimeOriginal
+              if(exifOff && dateStr===new Date().toISOString().split('T')[0]){
+                const en=u16(exifOff);
+                for(let i=0;i<en&&i<80;i++){
+                  const ep=exifOff+2+i*12;
+                  if(ep+12>buf.byteLength) break;
+                  const tag=u16(ep);
+                  if(tag===0x9003){
+                    const vo=u32(ep+8);
+                    let s='';
+                    for(let c=0;c<19;c++) s+=String.fromCharCode(view.getUint8(base+vo+c));
+                    const dp=s.match(/(\d{4}):(\d{2}):(\d{2})/);
+                    if(dp) dateStr=dp[1]+'-'+dp[2]+'-'+dp[3];
+                    break;
+                  }
+                }
+              }
+            }
+            off+=2+segLen; continue;
+          }
+          if((mk&0xFF00)===0xFF00){off+=2+view.getUint16(off+2);}else{off++;}
+        }
+      }
+    } catch(exifErr){}
+    // Fallback: filename pattern like 20231014
+    if(dateStr===new Date().toISOString().split('T')[0]){
+      const dm=file.name.match(/(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
+      if(dm) dateStr=dm[1]+'-'+dm[2]+'-'+dm[3];
+    }
+    // Final fallback: file.lastModified (but only if it's not today - that means it was copied today)
+    if(dateStr===new Date().toISOString().split('T')[0] && file.lastModified){
       const fd=new Date(file.lastModified);
-      dateStr=fd.getFullYear()+'-'+String(fd.getMonth()+1).padStart(2,'0')+'-'+String(fd.getDate()).padStart(2,'0');
+      const today=new Date();
+      // Only use lastModified if it's from a different day than today
+      if(fd.toDateString()!==today.toDateString())
+        dateStr=fd.getFullYear()+'-'+String(fd.getMonth()+1).padStart(2,'0')+'-'+String(fd.getDate()).padStart(2,'0');
     }
 
     const key=dateStr;
