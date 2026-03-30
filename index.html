@@ -2515,7 +2515,10 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
     if(saved){
       const parsed=JSON.parse(saved);
       if(Array.isArray(parsed)&&parsed.length>0){
-        trips=parsed;
+        // Filter out hardcoded sample trips by their fixed IDs (1, 2, 3)
+        const SAMPLE_IDS=[1,2,3];
+        const real=parsed.filter(function(t){ return !SAMPLE_IDS.includes(t.id); });
+        trips=real;
       }
     }
   }catch(e){}
