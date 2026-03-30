@@ -457,7 +457,21 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style>
-<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>
+<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'>
+function openPhotoModal(src){
+  let modal = document.getElementById('photoViewModal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'photoViewModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    modal.innerHTML = '<img id="photoViewImg" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px"/><button onclick="document.getElementById('photoViewModal').style.display='none'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>';
+    modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
+    document.body.appendChild(modal);
+  }
+  document.getElementById('photoViewImg').src = src;
+  modal.style.display = 'flex';
+}
+</script>
 <script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js'></script>
 </head>
 <body>
@@ -535,7 +549,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   <div class="loc-set-row">
     <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
     <span class="loc-name" id="locSetName">—</span>
-    <button class="loc-change" onclick="startNewEntry()">Change</button>
+    <button class="loc-change" onclick="changeLocationInEdit()">Change</button>
   </div>
   <div style="padding:4px 16px 12px;display:flex;align-items:center;gap:8px">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -895,7 +909,14 @@ document.addEventListener('click',function(e){
   const sizeBtn=e.target.closest('.size-btn[data-ci]');
   if(sizeBtn){const ci=+sizeBtn.dataset.ci,sz=sizeBtn.dataset.sz;if(newCatches[ci]){newCatches[ci].flySize=sz;const card=sizeBtn.closest('.catch-log-card');card.querySelectorAll('.size-btn[data-ci="'+ci+'"]').forEach(b=>b.classList.toggle('selected',b.dataset.sz===sz));}return}
   const photoArea=e.target.closest('.catch-photo-area[data-ci]');
-  if(photoArea){triggerCatchPhoto(+photoArea.dataset.ci);return}
+  if(photoArea){
+    // If tapped on the Replace button let it bubble, otherwise open photo modal
+    if(e.target.closest('button')) return;
+    const ci=+photoArea.dataset.ci;
+    const photo=newCatches[ci]&&newCatches[ci].photo;
+    if(photo){ openPhotoModal(photo); } else { triggerCatchPhoto(ci); }
+    return;
+  }
   const delBtn=e.target.closest('.catch-delete-btn[data-ci]');
   if(delBtn){confirmDeleteCatch(+delBtn.dataset.ci);return}
 });
@@ -1297,7 +1318,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 function buildCatchCard(c,i){
   // FIX 2: Photo area shown first, species/length blank until photo added
   const ph=c.photo
-    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint">Tap to replace photo</div><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
+    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint" style="display:none"></div><button onclick="event.stopPropagation();triggerCatchPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">Replace</button><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
     :`<div class="catch-photo-area" data-ci="${i}">
         <div class="catch-photo-hint">
           <div class="ph-icon"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
@@ -1600,6 +1621,7 @@ function clearLocation(){
 function continueToLog(){
   if(!selectedLocation.name)return;
   document.getElementById('locSetName').textContent=selectedLocation.name;
+  window._editingLocation = false;
   showView('vLog');
   // Auto-fetch weather for the selected location+date
   setTimeout(fetchWeather, 500);
@@ -1634,6 +1656,18 @@ function requestGPS(){
 function useGPSLocation(){setLocation(selectedLocation.name,selectedLocation.lat,selectedLocation.lng,selectedLocation.state,selectedLocation.state,selectedLocation.usgsId);showToast('Location set from GPS')}
 
 // ══ NEW ENTRY ══════════════════════════════════════════════════
+function changeLocationInEdit(){
+  // Go to location step but preserve current entry data
+  document.getElementById('searchResults').innerHTML='';
+  document.getElementById('locSearchInput').value='';
+  document.getElementById('locSelectedBadge').style.display='none';
+  document.getElementById('locContinueBtn').classList.remove('ready');
+  document.getElementById('gpsSubText').textContent='Tap to detect via GPS';
+  document.getElementById('gpsResult').style.display='none';
+  // Override continueToLog to go back to log view instead of clearing entry
+  window._editingLocation = true;
+  showView('vLocStep');
+}
 function startNewEntry(){
   newCatches=[];selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
   ['logTitle','logJournal'].forEach(id=>document.getElementById(id).value='');
