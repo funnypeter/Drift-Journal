@@ -458,18 +458,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style>
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'>
+
 function openPhotoModal(src){
-  let modal = document.getElementById('photoViewModal');
-  if(!modal){
-    modal = document.createElement('div');
-    modal.id = 'photoViewModal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
-    modal.innerHTML = '<img id="photoViewImg" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px"/><button onclick="document.getElementById('photoViewModal').style.display='none'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>';
-    modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
-    document.body.appendChild(modal);
+  let m=document.getElementById('photoViewModal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='photoViewModal';
+    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    m.innerHTML='<img id="photoViewImg" style="max-width:100vw;max-height:100vh;object-fit:contain"/><button onclick="document.getElementById(\'photoViewModal\').style.display=\'none\'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer">×</button>';
+    m.onclick=function(e){if(e.target===m)m.style.display='none';};
+    document.body.appendChild(m);
   }
-  document.getElementById('photoViewImg').src = src;
-  modal.style.display = 'flex';
+  document.getElementById('photoViewImg').src=src;
+  m.style.display='flex';
 }
 </script>
 <script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js'></script>
@@ -549,7 +550,16 @@ function openPhotoModal(src){
   <div class="loc-set-row">
     <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
     <span class="loc-name" id="locSetName">—</span>
-    <button class="loc-change" onclick="changeLocationInEdit()">Change</button>
+    <button class="loc-change" onclick="toggleInlineLocSearch()">Change</button>
+  </div>
+  <!-- Inline location search for edit mode -->
+  <div id="inlineLocSearch" style="display:none;padding:0 16px 12px">
+    <div style="position:relative">
+      <input id="inlineLocInput" type="text" placeholder="Search for a location..."
+        style="width:100%;border:1px solid rgba(0,0,0,.15);border-radius:10px;padding:10px 14px;font-size:14px;font-family:var(--sans);background:var(--bg);color:var(--ink);box-sizing:border-box;outline:none"
+        oninput="handleInlineLocSearch(this.value)"/>
+    </div>
+    <div id="inlineLocResults" style="background:var(--bg);border:1px solid rgba(0,0,0,.1);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto"></div>
   </div>
   <div style="padding:4px 16px 12px;display:flex;align-items:center;gap:8px">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -1656,17 +1666,52 @@ function requestGPS(){
 function useGPSLocation(){setLocation(selectedLocation.name,selectedLocation.lat,selectedLocation.lng,selectedLocation.state,selectedLocation.state,selectedLocation.usgsId);showToast('Location set from GPS')}
 
 // ══ NEW ENTRY ══════════════════════════════════════════════════
-function changeLocationInEdit(){
-  // Go to location step but preserve current entry data
-  document.getElementById('searchResults').innerHTML='';
-  document.getElementById('locSearchInput').value='';
-  document.getElementById('locSelectedBadge').style.display='none';
-  document.getElementById('locContinueBtn').classList.remove('ready');
-  document.getElementById('gpsSubText').textContent='Tap to detect via GPS';
-  document.getElementById('gpsResult').style.display='none';
-  // Override continueToLog to go back to log view instead of clearing entry
-  window._editingLocation = true;
-  showView('vLocStep');
+function toggleInlineLocSearch(){
+  const el = document.getElementById('inlineLocSearch');
+  const inp = document.getElementById('inlineLocInput');
+  const showing = el.style.display !== 'none';
+  el.style.display = showing ? 'none' : 'block';
+  if(!showing){ inp.value=''; document.getElementById('inlineLocResults').innerHTML=''; inp.focus(); }
+}
+let _inlineSearchTimer = null;
+function handleInlineLocSearch(val){
+  clearTimeout(_inlineSearchTimer);
+  const res = document.getElementById('inlineLocResults');
+  if(!val||val.trim().length<2){ res.innerHTML=''; return; }
+  _inlineSearchTimer = setTimeout(function(){
+    res.innerHTML = '<div style="padding:8px 14px;font-size:12px;color:var(--muted)">Searching...</div>';
+    fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(val.trim())+'&format=json&limit=6&addressdetails=1',{
+      headers:{'User-Agent':'DriftJournal/1.0'}
+    })
+    .then(r=>r.json())
+    .then(function(results){
+      if(!results.length){ res.innerHTML='<div style="padding:8px 14px;font-size:12px;color:var(--muted)">No results</div>'; return; }
+      res.innerHTML='';
+      results.forEach(function(p){
+        const addr=p.address||{};
+        const name=p.name||val;
+        const region=[addr.county,addr.state].filter(Boolean).join(', ');
+        const lat=parseFloat(p.lat); const lng=parseFloat(p.lon);
+        const state=addr.state||'';
+        const fullName=name+(state?', '+state:'');
+        const item=document.createElement('div');
+        item.style.cssText='padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(0,0,0,.06);font-size:13px';
+        item.innerHTML='<div style="font-weight:600">'+name+'</div><div style="font-size:11px;color:var(--muted)">'+region+'</div>';
+        item.onclick=function(){ selectInlineLocation(fullName,lat,lng,state); };
+        res.appendChild(item);
+      });
+    })
+    .catch(function(){ res.innerHTML='<div style="padding:8px 14px;font-size:12px;color:var(--muted)">Search failed</div>'; });
+  }, 400);
+}
+function selectInlineLocation(name, lat, lng, state){
+  selectedLocation = {name:name, lat:lat, lng:lng, state:state, usgsId:null};
+  document.getElementById('locSetName').textContent = name;
+  document.getElementById('inlineLocSearch').style.display = 'none';
+  document.getElementById('inlineLocInput').value = '';
+  document.getElementById('inlineLocResults').innerHTML = '';
+  showToast('Location updated');
+  if(lat) setTimeout(fetchWeather, 300);
 }
 function startNewEntry(){
   newCatches=[];selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
