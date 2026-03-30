@@ -951,11 +951,21 @@ function onDateOrLocationChange(){
 async function fetchUSGS(){
   let siteId=document.getElementById('usgsSiteId').value.trim();
   if(!siteId){
-    // Auto-find nearest gauge from current location
-    if(!selectedLocation.lat){showToast('No location set');return;}
+    if(!selectedLocation.lat&&!selectedLocation.name){showToast('No location set');return;}
     document.getElementById('usgsStatus').textContent='Finding nearest gauge...';
-    siteId = await findNearestGauge(selectedLocation.lat, selectedLocation.lng);
-    if(!siteId){document.getElementById('usgsStatus').textContent='No gauge found nearby';return;}
+    // Check hardcoded lookup table first
+    const locName=selectedLocation.name||'';
+    for(const key of Object.keys(USGS_GAUGES)){
+      if(locName.toLowerCase().includes(key.toLowerCase())||key.toLowerCase().includes(locName.split(',')[0].toLowerCase())){
+        siteId=USGS_GAUGES[key];
+        break;
+      }
+    }
+    // Fall back to API search
+    if(!siteId&&selectedLocation.lat){
+      siteId = await findNearestGauge(selectedLocation.lat, selectedLocation.lng);
+    }
+    if(!siteId){document.getElementById('usgsStatus').textContent='No gauge found — enter site ID manually';return;}
     document.getElementById('usgsSiteId').value=siteId;
   }
 
