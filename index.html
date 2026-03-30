@@ -459,6 +459,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </style>
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'>
 
+function openPhotoModal(src){
+  let m=document.getElementById('photoViewModal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='photoViewModal';
+    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    m.innerHTML='<img id="photoViewImg" style="max-width:100vw;max-height:100vh;object-fit:contain"/><button onclick="document.getElementById(\'photoViewModal\').style.display=\'none\'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer">×</button>';
+    m.onclick=function(e){if(e.target===m)m.style.display='none';};
+    document.body.appendChild(m);
+  }
+  document.getElementById('photoViewImg').src=src;
+  m.style.display='flex';
+}
 </script>
 <script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js'></script>
 </head>
@@ -765,7 +778,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </div>
 
 <!-- ENTRY DETAIL -->
-<div class="view" id="vEntry" style="padding-bottom:80px"><div id="entryDetailContent"></div></div>
+<div class="view" id="vEntry"><div id="entryDetailContent"></div></div>
 
 <!-- BOTTOM NAV -->
 <!-- PWA Install Banner -->
@@ -807,148 +820,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </div>
 
 <script>
-// ── IndexedDB storage for trips (Android-safe) ──────────────────────────────
-const DB_NAME='DriftJournal', DB_VER=1, STORE='trips';
-function openDB(){
-  return new Promise(function(res,rej){
-    const req=indexedDB.open(DB_NAME,DB_VER);
-    req.onupgradeneeded=function(e){ e.target.result.createObjectStore(STORE,{keyPath:'id'}); };
-    req.onsuccess=function(e){ res(e.target.result); };
-    req.onerror=function(){ rej(req.error); };
-  });
-}
-async function saveTripsIDB(){
-  // Save full data to localStorage first
-  try{
-    localStorage.setItem('driftjournal_trips',JSON.stringify(trips));
-  }catch(e){
-    // localStorage full - try without photos
-    const slim=trips.map(function(t){
-      const s=Object.assign({},t);
-      s.photos=[];
-      s.catches_list=(t.catches_list||[]).map(function(c){
-        const cc=Object.assign({},c); cc.photo=null; return cc;
-      });
-      return s;
-    });
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(slim));}catch(e2){
-      showToast('Storage full — could not save');
-    }
-  }
-  // Also save to IDB for redundancy
-  try{
-    const db=await openDB();
-    const tx=db.transaction(STORE,'readwrite');
-    const store=tx.objectStore(STORE);
-    store.clear();
-    trips.forEach(function(t){ store.put(t); });
-  }catch(e){}
-}
-async function loadTripsIDB(){
-  // Try localStorage first (has photos)
-  try{
-    const saved=localStorage.getItem('driftjournal_trips');
-    if(saved){
-      const parsed=JSON.parse(saved);
-      if(Array.isArray(parsed)&&parsed.length>0) return parsed;
-    }
-  }catch(e){}
-  // Fall back to IDB
-  try{
-    const db=await openDB();
-    const tx=db.transaction(STORE,'readonly');
-    const store=tx.objectStore(STORE);
-    return new Promise(function(res){
-      const req=store.getAll();
-      req.onsuccess=function(){ res(req.result||[]); };
-      req.onerror=function(){ res([]); };
-    });
-  }catch(e){ return []; }
-}
-
-function saveTrips(){
-  try{
-    localStorage.setItem('driftjournal_trips',JSON.stringify(trips));
-  }catch(e){
-    if(e.name==='QuotaExceededError'||e.code===22){
-      // Strip photos from oldest trips to make space
-      showToast('Storage full — compressing older photos...');
-      const toSave=trips.map(function(t,i){
-        if(i<trips.length-3) return t; // keep last 3 trips fully
-        const tc=Object.assign({},t);
-        tc.photos=[];
-        tc.catches_list=(t.catches_list||[]).map(function(c){
-          const cc=Object.assign({},c);
-          cc.photo=null;
-          return cc;
-        });
-        return tc;
-      });
-      try{localStorage.setItem('driftjournal_trips',JSON.stringify(toSave));}catch(e2){
-        showToast('Storage full — please delete old trips');
-      }
-    }
-  }
-}
-function openPhotoModal(src){
-  let m=document.getElementById('photoViewModal');
-  if(!m){
-    m=document.createElement('div');
-    m.id='photoViewModal';
-    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center';
-    m.innerHTML='<img id="photoViewImg" style="max-width:100vw;max-height:100vh;object-fit:contain"/><button onclick="document.getElementById(\'photoViewModal\').style.display=\'none\'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer">×</button>';
-    m.onclick=function(e){if(e.target===m)m.style.display='none';};
-    document.body.appendChild(m);
-  }
-  document.getElementById('photoViewImg').src=src;
-  m.style.display='flex';
-}
-async function compressAndSaveTrips(){
-  // Try saving as-is first
-  try{
-    const json = JSON.stringify(trips);
-    localStorage.setItem('driftjournal_trips', json);
-    return; // success
-  }catch(e){}
-
-  // If that failed, compress all photos to 800px / 60% quality and retry
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  async function shrink(dataUrl){
-    if(!dataUrl||!dataUrl.startsWith('data:image')) return dataUrl;
-    return new Promise(function(resolve){
-      const img = new Image();
-      img.onload = function(){
-        const MAX=800; let w=img.width,h=img.height;
-        if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
-        canvas.width=w; canvas.height=h;
-        ctx.drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL('image/jpeg',0.6));
-      };
-      img.onerror=function(){resolve(dataUrl);};
-      img.src=dataUrl;
-    });
-  }
-  const compressed = await Promise.all(trips.map(async function(t){
-    const tc = Object.assign({},t);
-    if(tc.photos) tc.photos = await Promise.all(tc.photos.map(shrink));
-    if(tc.catches_list) tc.catches_list = await Promise.all(tc.catches_list.map(async function(c){
-      const cc=Object.assign({},c);
-      if(cc.photo) cc.photo = await shrink(cc.photo);
-      return cc;
-    }));
-    return tc;
-  }));
-  try{
-    localStorage.setItem('driftjournal_trips', JSON.stringify(compressed));
-    // Update in-memory trips with compressed versions too
-    compressed.forEach(function(tc,i){ if(trips[i]) trips[i]=tc; });
-  }catch(e2){
-    showToast('Could not save — storage full');
-  }
-}
-
-
 // On load: ?gemini=KEY in URL saves the Gemini key without needing UI
 (function(){
   try{
@@ -1074,25 +945,8 @@ function onDateOrLocationChange(){
 }
 
 async function fetchUSGS(){
-  let siteId=document.getElementById('usgsSiteId').value.trim();
-  if(!siteId){
-    if(!selectedLocation.lat&&!selectedLocation.name){showToast('No location set');return;}
-    document.getElementById('usgsStatus').textContent='Finding nearest gauge...';
-    // Check hardcoded lookup table first
-    const locName=selectedLocation.name||'';
-    for(const key of Object.keys(USGS_GAUGES)){
-      if(locName.toLowerCase().includes(key.toLowerCase())||key.toLowerCase().includes(locName.split(',')[0].toLowerCase())){
-        siteId=USGS_GAUGES[key];
-        break;
-      }
-    }
-    // Fall back to API search
-    if(!siteId&&selectedLocation.lat){
-      siteId = await findNearestGauge(selectedLocation.lat, selectedLocation.lng);
-    }
-    if(!siteId){document.getElementById('usgsStatus').textContent='No gauge found — enter site ID manually';return;}
-    document.getElementById('usgsSiteId').value=siteId;
-  }
+  const siteId=document.getElementById('usgsSiteId').value.trim();
+  if(!siteId){showToast('Enter a USGS site ID first');return;}
 
   const logDate=document.getElementById('logDate').value;
   const isHistorical=logDate&&logDate<new Date().toISOString().split('T')[0];
@@ -1172,148 +1026,6 @@ async function fetchUSGS(){
   }
   ri.classList.remove('spin');
 }
-async function fetchWeather(){
-  if(!selectedLocation.lat||!selectedLocation.lng) return;
-  const lat=selectedLocation.lat, lng=selectedLocation.lng;
-  const logDate=document.getElementById('logDate').value;
-  const isHistorical=logDate&&logDate<new Date().toISOString().split('T')[0];
-
-  try{
-    let url;
-    if(isHistorical){
-      url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lng
-        +'&start_date='+logDate+'&end_date='+logDate
-        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode'
-        +',windspeed_10m_max,winddirection_10m_dominant,surface_pressure_mean'
-        +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
-    }else{
-      url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng
-        +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode'
-        +',windspeed_10m_max,winddirection_10m_dominant'
-        +'&hourly=surface_pressure'
-        +'&current_weather=true'
-        +'&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&timezone=auto';
-    }
-
-    const r=await Promise.race([
-      fetch(url),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-    ]);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const data=await r.json();
-
-    const daily=data.daily;
-    if(!daily) throw new Error('No weather data');
-
-    // WMO code → description
-    function wmoDesc(code){
-      if(code<=0) return 'Clear';
-      if(code<=1) return 'Clear';
-      if(code<=3) return 'Partly Cloudy';
-      if(code<=48) return 'Foggy';
-      if(code<=57) return 'Drizzle';
-      if(code<=67) return 'Rain';
-      if(code<=77) return 'Snow';
-      if(code<=82) return 'Showers';
-      if(code<=99) return 'Thunderstorm';
-      return 'Variable';
-    }
-
-    // Wind direction degrees → compass
-    function windDir(deg){
-      const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-      return dirs[Math.round(deg/22.5)%16];
-    }
-
-    const tMax=daily.temperature_2m_max?.[0];
-    const tMin=daily.temperature_2m_min?.[0];
-    const wCode=daily.weathercode?.[0];
-    const wind=daily.windspeed_10m_max?.[0];
-    const windDeg=daily.winddirection_10m_dominant?.[0];
-    const precip=daily.precipitation_sum?.[0];
-
-    // ── Air temp ─────────────────────────────────────────────
-    // Prefer current_weather for today; fall back to daily avg
-    if(data.current_weather){
-      document.getElementById('logAirTemp').value=Math.round(data.current_weather.temperature)+'°F';
-    } else if(tMax!=null&&tMin!=null){
-      document.getElementById('logAirTemp').value=Math.round((tMax+tMin)/2)+'°F';
-    }
-
-    // ── Weather description ──────────────────────────────────
-    if(wCode!=null){
-      let desc=wmoDesc(wCode);
-      if(precip>0.1) desc+=' / '+precip.toFixed(2)+'" precip';
-      document.getElementById('logWeather').value=desc;
-    }
-
-    // ── Wind ─────────────────────────────────────────────────
-    if(wind!=null){
-      const dir=windDeg!=null?' '+windDir(windDeg):'';
-      document.getElementById('logWind').value=Math.round(wind)+' mph'+dir;
-    } else if(data.current_weather&&data.current_weather.windspeed!=null){
-      const curr=data.current_weather;
-      const dir=curr.winddirection!=null?' '+windDir(curr.winddirection):'';
-      document.getElementById('logWind').value=Math.round(curr.windspeed)+' mph'+dir;
-    }
-
-    // ── Barometric pressure ──────────────────────────────────
-    // Archive API returns surface_pressure_mean in daily
-    // Forecast API returns surface_pressure in hourly — find closest hour to now
-    let pressureHpa=null;
-    if(isHistorical&&daily.surface_pressure_mean?.[0]!=null){
-      pressureHpa=daily.surface_pressure_mean[0];
-    } else if(!isHistorical&&data.hourly?.surface_pressure){
-      // Find the current hour index
-      const now=new Date();
-      const hourStr=now.toISOString().substring(0,13); // "2026-03-27T17"
-      const times=data.hourly.time||[];
-      let bestIdx=0;
-      for(let i=0;i<times.length;i++){
-        if(times[i].startsWith(hourStr)){bestIdx=i;break;}
-      }
-      pressureHpa=data.hourly.surface_pressure[bestIdx];
-    }
-    if(pressureHpa!=null){
-      // Convert hPa to inHg (standard for US fishing/weather)
-      const inHg=(pressureHpa*0.02953).toFixed(2);
-      document.getElementById('logBaro').value=inHg+' inHg';
-    }
-
-    showToast('Weather loaded');
-  }catch(e){
-    console.log('Weather fetch failed:',e.message);
-  }
-}
-
-
-async function findNearestGauge(lat,lng){
-  try{
-    // Use RDB text format - JSON format returns HTML on this endpoint
-    const url=`https://waterservices.usgs.gov/nwis/site/?format=rdb&bBox=${(lng-0.5).toFixed(2)},${(lat-0.5).toFixed(2)},${(lng+0.5).toFixed(2)},${(lat+0.5).toFixed(2)}&parameterCd=00060&siteType=ST&siteStatus=active`;
-    const r=await fetch(url,{mode:'cors'});
-    if(!r.ok) return null;
-    const text=await r.text();
-    // RDB format: comment lines start with #, header line, format line, then data
-    // Data lines start with digits (site number)
-    const lines=text.split('\n').filter(l=>l.match(/^\d/));
-    if(!lines.length) return null;
-    // Find closest site - columns are tab-separated: agency, site_no, name, type, lat, lng...
-    let best=null, bestDist=Infinity;
-    for(const line of lines){
-      const cols=line.split('\t');
-      if(cols.length<6) continue;
-      const siteNo=cols[1];
-      const slat=parseFloat(cols[4]);
-      const slng=parseFloat(cols[5]);
-      if(!slat||!slng) continue;
-      const dist=Math.sqrt((slat-lat)**2+(slng-lng)**2);
-      if(dist<bestDist){bestDist=dist;best=siteNo;}
-    }
-    return best;
-  }catch(e){return null;}
-}
-
 async function fetchWeather(){
   if(!selectedLocation.lat||!selectedLocation.lng) return;
   const lat=selectedLocation.lat, lng=selectedLocation.lng;
@@ -1589,7 +1301,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 
     // Update length input
     const lengthInput=card.querySelector('.catch-field input[placeholder="18.5"]')||card.querySelector('.catch-field input[placeholder="—"]');
-    if(lengthInput){lengthInput.value=result.length||'';lengthInput.dispatchEvent(new Event('input'));}
+    if(lengthInput) lengthInput.value=result.length||'';
 
     const meshNote=result.mesh_holes_counted>0?' ('+result.mesh_holes_counted+' mesh holes × '+getNetSize()+'")'  :'';
     aiStrip.innerHTML='<div class="ai-result-strip">'+
@@ -2004,8 +1716,15 @@ function selectInlineLocation(name, lat, lng, state){
     });
     document.getElementById('usgsStatus').textContent='Searching for nearby gauge...';
     document.getElementById('usgsSiteId').value='';
-    document.getElementById('usgsSiteId').value='';
-    document.getElementById('usgsStatus').textContent='Location changed — tap Fetch to reload';
+    setTimeout(async function(){
+      const gaugeId = await findNearestGauge(lat, lng);
+      if(gaugeId){
+        document.getElementById('usgsSiteId').value = gaugeId;
+        fetchUSGS();
+      } else {
+        document.getElementById('usgsStatus').textContent='No gauge found nearby';
+      }
+    }, 500);
   }
 }
 function startNewEntry(){
@@ -2061,7 +1780,7 @@ function sealEntry(){
   trips.push(newTrip);renderFeed();try{renderMap();}catch(e){console.log("map err",e.message);}
   newCatches=[];selectedLocation={name:"",lat:null,lng:null,state:"",usgsId:null};
   // Persist to localStorage
-  saveTripsIDB();
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
 
   document.getElementById('statTrips').textContent=trips.length;
   document.getElementById('statCatches').textContent=trips.reduce((s,t)=>s+t.catches_list.length,0);
@@ -2088,7 +1807,7 @@ function renderFeed(){
   if(!sorted.length){fc.innerHTML=`<div class="empty-feed"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><h3>No journeys yet</h3><p>Tap + to log your first trip.</p><button onclick="startNewEntry()">Log First Trip</button></div>`;return}
   fc.innerHTML=sorted.map((t,i)=>{
     const idx=trips.indexOf(t);
-    const heroSrc=t.photos?.[0]||(t.catches_list||[]).find(c=>c.photo)?.photo||null;
+    const heroSrc=t.photos?.[0]||null;
     const ph=heroSrc?`<div class="trip-ph" style="background:${t.bgColor}"><img src="${heroSrc}"/></div>`:`<div class="trip-ph" style="background:${t.bgColor}"><svg width="70" height="45" viewBox="0 0 70 45" fill="none" opacity=".28"><path d="M5 30 Q18 18 30 24 Q42 30 55 20 Q62 14 68 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="35" cy="24" rx="10" ry="6" fill="white" opacity=".35"/></svg></div>`;
     const tags=[t.flow?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>${t.flow}</span>`:'',t.water?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="4"/></svg>${t.water}</span>`:'',t.weather?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>${t.weather}</span>`:'']. filter(Boolean).join('');
     return `<div class="trip-card" onclick="openEntry(${idx})">${ph}<div class="trip-title-big">${t.title}</div><div class="trip-date-loc">${t.displayDate}${t.location?" · "+t.location.split(",")[0]:""}</div><div class="tag-row">${tags}</div>${t.notes?`<div class="trip-quote">"${t.notes.substring(0,130)}${t.notes.length>130?'...':''}"</div>`:''}</div>${i<sorted.length-1?'<div class="divider"></div>':''}`;
@@ -2542,7 +2261,7 @@ function saveEditableEntry(idx){
     return{species:c.species||'Unknown',fly:c.fly||'—',flyCategory:c.flyCategory,size:c.flySize,length:c.length||'—',time:c.time||'—',notes:c.notes||'',photo:c.photo||null};
   });
   const photos=newCatches.filter(function(c){return c.photo;}).map(function(c){return c.photo;});
-  e.photos=photos; // Always update photos array, even if empty
+  if(photos.length) e.photos=photos;
   // Reset save button
   const saveBtn=document.querySelector('.save-bar button');
   if(saveBtn){
@@ -2551,7 +2270,7 @@ function saveEditableEntry(idx){
   }
   renderFeed();renderMap();
   // Persist to localStorage
-  saveTripsIDB();
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
 
   showToast('Entry updated!');
   openEntry(idx);
@@ -2595,7 +2314,7 @@ function addTripPhoto(idx){
   inp.onchange=e=>{
     const f=e.target.files[0];if(!f)return;
     const reader=new FileReader();
-    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);saveTripsIDB(); showToast('Photo added')};
+    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){} showToast('Photo added')};
     reader.readAsDataURL(f);
   };
   document.body.appendChild(inp);inp.click();
@@ -2614,25 +2333,20 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
 
 // Load saved trips from localStorage
 (function(){
-  // Load from IndexedDB first (primary), fall back to localStorage
-  loadTripsIDB().then(function(idbTrips){
-    if(idbTrips&&idbTrips.length>0){
-      trips=idbTrips;
-    } else {
-      // Fallback to localStorage
-      try{
-        const saved=localStorage.getItem('driftjournal_trips');
-        if(saved){
-          const parsed=JSON.parse(saved);
-          if(Array.isArray(parsed)&&parsed.length>0) trips=parsed;
-        }
-      }catch(e){}
+  try{
+    const saved=localStorage.getItem('driftjournal_trips');
+    if(saved){
+      const parsed=JSON.parse(saved);
+      if(Array.isArray(parsed)&&parsed.length>0){
+        trips=parsed;
+      }
     }
-    renderFeed();
-    try{renderMap();}catch(e){}
-    document.getElementById('statTrips').textContent=trips.length;
-    document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
-  });
+  }catch(e){}
+  // Always render from current trips (localStorage overrides sample data)
+  renderFeed();
+  try{renderMap();}catch(e){}
+  document.getElementById('statTrips').textContent=trips.length;
+  document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
 })();
 // Clean up any stale progress bar from previous session
 (function(){const b=document.getElementById('identifyProgressBar');if(b)b.remove();})();
@@ -2881,7 +2595,7 @@ async function handleBulkPhotos(files){
   if(saveLabel) saveLabel.textContent='Save '+groupList.length+' Trip'+(groupList.length!==1?'s':'');
 }
 
-async function saveBulkTrips(){
+function saveBulkTrips(){
   if(!_bulkTrips||!_bulkTrips.length){showToast('No trips to save');return;}
   _bulkTrips.forEach(function(g){
     // Convert each photo into a catch entry so it shows in the Catch Gallery
@@ -2901,20 +2615,45 @@ async function saveBulkTrips(){
       moon:getMoonPhase(g.date),
       notes:'',
       catches_list:catches_list,
-      photos:catches_list.filter(function(c){return c.photo;}).map(function(c){return c.photo;}),
+      photos:g.photos||[],
       bgColor:BG[trips.length%BG.length]
     };
     trips.push(newTrip);
   });
-  await saveTripsIDB();
-  renderFeed();
-  closeBulkImport();
-  document.getElementById('statTrips').textContent=trips.length;
-  document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
-  const count=_bulkTrips.length;
   _bulkTrips=[];
-  showToast('Imported '+count+' trip(s)!');
-  switchTab('vHome','btn-home');
+  // Compress all catch photos then save
+  (async function(){
+    for(let i=0;i<trips.length;i++){
+      const t=trips[i];
+      if(!t.catches_list) continue;
+      for(let j=0;j<t.catches_list.length;j++){
+        const c=t.catches_list[j];
+        if(!c.photo||!c.photo.startsWith('data:image')) continue;
+        c.photo=await new Promise(function(res){
+          const img=new Image();
+          img.onload=function(){
+            const MAX=800;let w=img.width,h=img.height;
+            if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+            const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+            cv.getContext('2d').drawImage(img,0,0,w,h);
+            res(cv.toDataURL('image/jpeg',0.7));
+          };
+          img.onerror=function(){res(c.photo);};
+          img.src=c.photo;
+        });
+      }
+      t.photos=t.catches_list.filter(function(c){return c.photo;}).map(function(c){return c.photo;});
+    }
+    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){
+      showToast('Storage full — some photos may not save');
+    }
+    renderFeed();
+    closeBulkImport();
+    document.getElementById('statTrips').textContent=trips.length;
+    document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
+    showToast('Imported trips saved!');
+    switchTab('vHome','btn-home');
+  })();
 }
 
 
