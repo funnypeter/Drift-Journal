@@ -806,7 +806,32 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 <div class="toast" id="toast"></div>
 </div>
 
-<script>function openPhotoModal(src){
+<script>
+function saveTrips(){
+  try{
+    localStorage.setItem('driftjournal_trips',JSON.stringify(trips));
+  }catch(e){
+    if(e.name==='QuotaExceededError'||e.code===22){
+      // Strip photos from oldest trips to make space
+      showToast('Storage full — compressing older photos...');
+      const toSave=trips.map(function(t,i){
+        if(i<trips.length-3) return t; // keep last 3 trips fully
+        const tc=Object.assign({},t);
+        tc.photos=[];
+        tc.catches_list=(t.catches_list||[]).map(function(c){
+          const cc=Object.assign({},c);
+          cc.photo=null;
+          return cc;
+        });
+        return tc;
+      });
+      try{localStorage.setItem('driftjournal_trips',JSON.stringify(toSave));}catch(e2){
+        showToast('Storage full — please delete old trips');
+      }
+    }
+  }
+}
+function openPhotoModal(src){
   let m=document.getElementById('photoViewModal');
   if(!m){
     m=document.createElement('div');
@@ -868,11 +893,7 @@ const MONTHS=["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST",
 const MONTHS_SHORT=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const BG=['linear-gradient(160deg,#374a3a,#1a2e1c)','linear-gradient(160deg,#0d2b4e,#1a4a6e)','linear-gradient(160deg,#1a3a2a,#2d5a3d)','linear-gradient(160deg,#2a1a3a,#1a0a2a)','linear-gradient(160deg,#3a2a1a,#2a1a0a)'];
 
-let trips=[
-  {id:1,title:"Big Wood River Exploration",date:"2023-10-02",displayDate:"OCTOBER 02, 2023",location:"Big Wood River, ID",state:"Idaho",lat:43.6895,lng:-114.3638,flow:"320 CFS",water:"55°F",air:"62°F",baro:"30.45 inHg",weather:"High Pressure",moon:"🌒",notes:"High pressure made the fish lethargic. Didn't get my first touch until 1pm switching to a foam hopper.",catches_list:[{species:"Brown Trout",fly:"Dave's Hopper",size:"10",length:"19.0",time:"13:15 PM",photo:null},{species:"Brown Trout",fly:"Chernobyl Ant",size:"12",length:"16.0",time:"15:40 PM",photo:null}],photos:[],bgColor:BG[2]},
-  {id:2,title:"Lost Lake Twilight Hatch",date:"2023-10-09",displayDate:"OCTOBER 09, 2023",location:"Lost Lake, WY",state:"Wyoming",lat:44.5611,lng:-110.8247,flow:"Still Water",water:"48°F",air:"55°F",baro:"30.22 inHg",weather:"Clear Skies",moon:"🌕",notes:"By 6:30 the surface was boiling with rising cutthroats. One of those evenings you talk about for years.",catches_list:[{species:"Cutthroat Trout",fly:"Elk Hair Caddis",size:"16",length:"15.0",time:"18:45 PM",photo:null},{species:"Cutthroat Trout",fly:"CDC Caddis",size:"16",length:"17.5",time:"19:10 PM",photo:null}],photos:[],bgColor:BG[1]},
-  {id:3,title:"Silver Creek Solo Session",date:"2023-10-14",displayDate:"OCTOBER 14, 2023",location:"Silver Creek, ID",state:"Idaho",lat:43.2195,lng:-114.7654,flow:"180 CFS",water:"52°F",air:"61°F",baro:"29.88 inHg",weather:"Partly Cloudy",moon:"🌔",notes:"First light brought dense fog over the meadow. Switched to a size 22 midge and finally got takes.",catches_list:[{species:"Rainbow Trout",fly:"Parachute Adams",size:"22",length:"18.5",time:"07:42 AM",photo:null},{species:"Brown Trout",fly:"Midge Cluster",size:"20",length:"12.0",time:"11:30 AM",photo:null},{species:"Rainbow Trout",fly:"Elk Hair Caddis",size:"18",length:"16.5",time:"14:10 PM",photo:null}],photos:[],bgColor:BG[0]}
-];
+let trips=[];
 
 let newCatches=[];
 let selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
@@ -1936,7 +1957,7 @@ function sealEntry(){
   trips.push(newTrip);renderFeed();try{renderMap();}catch(e){console.log("map err",e.message);}
   newCatches=[];selectedLocation={name:"",lat:null,lng:null,state:"",usgsId:null};
   // Persist to localStorage
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){if(e.name==='QuotaExceededError'||e.code===22)showToast('Storage full — photo may not persist');}
 
   document.getElementById('statTrips').textContent=trips.length;
   document.getElementById('statCatches').textContent=trips.reduce((s,t)=>s+t.catches_list.length,0);
@@ -1963,7 +1984,7 @@ function renderFeed(){
   if(!sorted.length){fc.innerHTML=`<div class="empty-feed"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><h3>No journeys yet</h3><p>Tap + to log your first trip.</p><button onclick="startNewEntry()">Log First Trip</button></div>`;return}
   fc.innerHTML=sorted.map((t,i)=>{
     const idx=trips.indexOf(t);
-    const heroSrc=t.photos?.[0]||null;
+    const heroSrc=t.photos?.[0]||(t.catches_list||[]).find(c=>c.photo)?.photo||null;
     const ph=heroSrc?`<div class="trip-ph" style="background:${t.bgColor}"><img src="${heroSrc}"/></div>`:`<div class="trip-ph" style="background:${t.bgColor}"><svg width="70" height="45" viewBox="0 0 70 45" fill="none" opacity=".28"><path d="M5 30 Q18 18 30 24 Q42 30 55 20 Q62 14 68 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="35" cy="24" rx="10" ry="6" fill="white" opacity=".35"/></svg></div>`;
     const tags=[t.flow?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>${t.flow}</span>`:'',t.water?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="4"/></svg>${t.water}</span>`:'',t.weather?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>${t.weather}</span>`:'']. filter(Boolean).join('');
     return `<div class="trip-card" onclick="openEntry(${idx})">${ph}<div class="trip-title-big">${t.title}</div><div class="trip-date-loc">${t.displayDate}${t.location?" · "+t.location.split(",")[0]:""}</div><div class="tag-row">${tags}</div>${t.notes?`<div class="trip-quote">"${t.notes.substring(0,130)}${t.notes.length>130?'...':''}"</div>`:''}</div>${i<sorted.length-1?'<div class="divider"></div>':''}`;
@@ -2417,7 +2438,7 @@ function saveEditableEntry(idx){
     return{species:c.species||'Unknown',fly:c.fly||'—',flyCategory:c.flyCategory,size:c.flySize,length:c.length||'—',time:c.time||'—',notes:c.notes||'',photo:c.photo||null};
   });
   const photos=newCatches.filter(function(c){return c.photo;}).map(function(c){return c.photo;});
-  if(photos.length) e.photos=photos;
+  e.photos=photos; // Always update photos array, even if empty
   // Reset save button
   const saveBtn=document.querySelector('.save-bar button');
   if(saveBtn){
@@ -2426,7 +2447,7 @@ function saveEditableEntry(idx){
   }
   renderFeed();renderMap();
   // Persist to localStorage
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){if(e.name==='QuotaExceededError'||e.code===22)showToast('Storage full — photo may not persist');}
 
   showToast('Entry updated!');
   openEntry(idx);
@@ -2470,7 +2491,7 @@ function addTripPhoto(idx){
   inp.onchange=e=>{
     const f=e.target.files[0];if(!f)return;
     const reader=new FileReader();
-    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){} showToast('Photo added')};
+    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){if(e.name==='QuotaExceededError'||e.code===22)showToast('Storage full — photo may not persist');} showToast('Photo added')};
     reader.readAsDataURL(f);
   };
   document.body.appendChild(inp);inp.click();
@@ -2771,12 +2792,12 @@ function saveBulkTrips(){
       moon:getMoonPhase(g.date),
       notes:'',
       catches_list:catches_list,
-      photos:g.photos||[],
+      photos:catches_list.filter(function(c){return c.photo;}).map(function(c){return c.photo;}),
       bgColor:BG[trips.length%BG.length]
     };
     trips.push(newTrip);
   });
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){if(e.name==='QuotaExceededError'||e.code===22)showToast('Storage full — photo may not persist');}
   renderFeed();
   closeBulkImport();
   document.getElementById('statTrips').textContent=trips.length;
