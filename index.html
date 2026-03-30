@@ -819,7 +819,35 @@ function openPhotoModal(src){
 <div class="toast" id="toast"></div>
 </div>
 
-<script>
+<script>function compressPhoto(dataUrl,cb){
+  if(!dataUrl||!dataUrl.startsWith('data:image')){cb(dataUrl);return;}
+  const img=new Image();
+  img.onload=function(){
+    const MAX=800;let w=img.width,h=img.height;
+    if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg',0.7));
+  };
+  img.onerror=function(){cb(dataUrl);};
+  img.src=dataUrl;
+}
+async function compressAndSave(){
+  for(let i=0;i<trips.length;i++){
+    const t=trips[i];
+    if(!t.catches_list) continue;
+    for(let j=0;j<t.catches_list.length;j++){
+      const c=t.catches_list[j];
+      if(!c.photo||!c.photo.startsWith('data:image')) continue;
+      c.photo=await new Promise(function(res){compressPhoto(c.photo,res);});
+    }
+    t.photos=t.catches_list.filter(function(c){return c.photo;}).map(function(c){return c.photo;});
+  }
+  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){
+    showToast('Storage full — could not save photos');
+  }
+}
+
 // On load: ?gemini=KEY in URL saves the Gemini key without needing UI
 (function(){
   try{
@@ -1779,8 +1807,8 @@ function sealEntry(){
   const newTrip={id:Date.now(),title,date,displayDate:fmtDisplay(date),location:selectedLocation.name,state:selectedLocation.state||'',lat:selectedLocation.lat,lng:selectedLocation.lng,flow,water,air:document.getElementById('logAirTemp').value,baro:document.getElementById('logBaro').value,weather:document.getElementById('logWeather').value,moon:getMoonPhase(date),notes,catches_list,photos:tripPhotos,bgColor:BG[trips.length%BG.length]};
   trips.push(newTrip);renderFeed();try{renderMap();}catch(e){console.log("map err",e.message);}
   newCatches=[];selectedLocation={name:"",lat:null,lng:null,state:"",usgsId:null};
-  // Persist to localStorage
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  // Persist to localStorage with photo compression
+  compressAndSave();
 
   document.getElementById('statTrips').textContent=trips.length;
   document.getElementById('statCatches').textContent=trips.reduce((s,t)=>s+t.catches_list.length,0);
@@ -2270,7 +2298,7 @@ function saveEditableEntry(idx){
   }
   renderFeed();renderMap();
   // Persist to localStorage
-  try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
+  compressAndSave();
 
   showToast('Entry updated!');
   openEntry(idx);
@@ -2314,7 +2342,7 @@ function addTripPhoto(idx){
   inp.onchange=e=>{
     const f=e.target.files[0];if(!f)return;
     const reader=new FileReader();
-    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){} showToast('Photo added')};
+    reader.onload=ev=>{if(!trips[idx].photos)trips[idx].photos=[];trips[idx].photos.push(ev.target.result);inp.remove();openTripEdit(idx);compressAndSave(); showToast('Photo added')};
     reader.readAsDataURL(f);
   };
   document.body.appendChild(inp);inp.click();
@@ -2621,39 +2649,14 @@ function saveBulkTrips(){
     trips.push(newTrip);
   });
   _bulkTrips=[];
-  // Compress all catch photos then save
-  (async function(){
-    for(let i=0;i<trips.length;i++){
-      const t=trips[i];
-      if(!t.catches_list) continue;
-      for(let j=0;j<t.catches_list.length;j++){
-        const c=t.catches_list[j];
-        if(!c.photo||!c.photo.startsWith('data:image')) continue;
-        c.photo=await new Promise(function(res){
-          const img=new Image();
-          img.onload=function(){
-            const MAX=800;let w=img.width,h=img.height;
-            if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
-            const cv=document.createElement('canvas');cv.width=w;cv.height=h;
-            cv.getContext('2d').drawImage(img,0,0,w,h);
-            res(cv.toDataURL('image/jpeg',0.7));
-          };
-          img.onerror=function(){res(c.photo);};
-          img.src=c.photo;
-        });
-      }
-      t.photos=t.catches_list.filter(function(c){return c.photo;}).map(function(c){return c.photo;});
-    }
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){
-      showToast('Storage full — some photos may not save');
-    }
+  compressAndSave().then(function(){
     renderFeed();
     closeBulkImport();
     document.getElementById('statTrips').textContent=trips.length;
     document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
     showToast('Imported trips saved!');
     switchTab('vHome','btn-home');
-  })();
+  });
 }
 
 
