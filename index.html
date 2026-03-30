@@ -1737,24 +1737,27 @@ function selectInlineLocation(name, lat, lng, state){
   document.getElementById('inlineLocInput').value = '';
   document.getElementById('inlineLocResults').innerHTML = '';
   showToast('Location updated');
-  if(lat){
-    setTimeout(fetchWeather, 300);
+  setTimeout(fetchWeather, 300);
+  // Check USGS_GAUGES lookup table first
+  let gaugeId = null;
+  for(const key of Object.keys(USGS_GAUGES)){
+    if(name.toLowerCase().includes(key.toLowerCase())||key.toLowerCase().includes(name.split(',')[0].toLowerCase())){
+      gaugeId = USGS_GAUGES[key];
+      break;
+    }
+  }
+  if(gaugeId){
+    document.getElementById('usgsSiteId').value = gaugeId;
     ['usgsFlow','usgsTemp','usgsGage'].forEach(function(id){
       const el=document.getElementById(id); if(el) el.textContent='…';
     });
-    document.getElementById('usgsStatus').textContent='Searching for nearby gauge...';
-    document.getElementById('usgsSiteId').value='';
-    setTimeout(async function(){
-      const gaugeId = await findNearestGauge(lat, lng);
-      if(gaugeId){
-        document.getElementById('usgsSiteId').value = gaugeId;
-        fetchUSGS();
-      } else {
-        document.getElementById('usgsStatus').textContent='No gauge found nearby';
-      }
-    }, 500);
+    setTimeout(fetchUSGS, 400);
+  } else {
+    document.getElementById('usgsSiteId').value = '';
+    document.getElementById('usgsStatus').textContent = 'Location changed — tap Fetch to reload';
   }
 }
+
 function startNewEntry(){
   newCatches=[];selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
   ['logTitle','logJournal'].forEach(id=>document.getElementById(id).value='');
