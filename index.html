@@ -1215,8 +1215,8 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
     // Build prompt using net size if set
     const netSz=getNetSize();
     const prompt=netSz
-      ?'You are measuring a fish in a landing net. Each mesh hole is exactly '+netSz+' inches wide. COUNT the number of mesh holes spanning the fish from mouth tip to tail tip, then MULTIPLY by '+netSz+' to get the length. Do not guess — actually count the holes visible in the image. Trout curve in nets so measure along the body. Also identify the species. Output ONLY valid JSON with your actual measurement: {"species":"Brown Trout","length":"XX.X","confidence":75}. Replace XX.X with your calculated length. Species options: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
-      :'Look carefully at this fish photo. Estimate the fish length in inches from the tip of the mouth to the end of the tail. Use hands, fingers, net mesh, rod, or any visible reference object to calibrate. A typical adult hand is 7-8 inches. Do not use a default value — actually analyze the image. Output ONLY valid JSON with your real estimate: {"species":"Brown Trout","length":"XX.X","confidence":75}. Replace XX.X with your actual estimate. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
+      ?'If the holes at the bottom of the net are '+netSz+' inches in diameter, estimate the size of the fish. Also identify the species. Output ONLY valid JSON: {"species":"Brown Trout","length":"XX.X","confidence":75} where XX.X is your actual measurement. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
+      :'Estimate the size of this fish in inches. Also identify the species. Output ONLY valid JSON: {"species":"Brown Trout","length":"XX.X","confidence":75} where XX.X is your actual estimate. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
 
     // Gemini only
     const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
@@ -1711,7 +1711,16 @@ function selectInlineLocation(name, lat, lng, state){
   document.getElementById('inlineLocInput').value = '';
   document.getElementById('inlineLocResults').innerHTML = '';
   showToast('Location updated');
-  if(lat) setTimeout(fetchWeather, 300);
+  if(lat){
+    setTimeout(fetchWeather, 300);
+    // Clear old USGS data and fetch for new location
+    ['usgsFlow','usgsTemp','usgsGage'].forEach(function(id){
+      const el=document.getElementById(id); if(el) el.textContent='…';
+    });
+    document.getElementById('usgsStatus').textContent='Searching for nearby gauge...';
+    document.getElementById('usgsSiteId').value='';
+    setTimeout(fetchUSGS, 500);
+  }
 }
 function startNewEntry(){
   newCatches=[];selectedLocation={name:'',lat:null,lng:null,state:'',usgsId:null};
