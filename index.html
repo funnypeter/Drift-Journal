@@ -1352,7 +1352,7 @@ function buildCatchCard(c,i){
       <label>NOTES</label>
       <textarea placeholder="Notes about this catch..." oninput="newCatches[${i}].notes=this.value">${c.notes||''}</textarea>
     </div>
-    <div class="catch-delete-row">
+    <div class="catch-delete-row">${c.photo?`<button onclick="identifyWithClaude(newCatches[${i}].photo,${i})" style="flex:1;background:var(--teal);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);margin-right:8px">Re-identify Fish</button>`:''}
       <button class="catch-delete-btn" data-ci="${i}">
         <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete Catch
       </button>
@@ -2015,13 +2015,7 @@ function openEntry(idx){
           <div><div style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:1px">FLY SIZE</div><div style="font-family:var(--serif);font-size:.85rem;font-weight:700">#${c.size||'—'}</div></div>
         </div>
         ${c.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;padding:4px 0 2px;line-height:1.4">${c.notes}</div>`:''}
-        ${(c.species==='Unknown'||!c.species)&&c.photo?`
-        <button onclick="event.stopPropagation();identifyDetailCatch(${ci},${idx})"
-          style="width:100%;margin-top:6px;padding:8px;background:var(--teal);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:6px">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          Identify Fish
-        </button>`:''}
-        <div class="catch-expand-hint">tap to expand</div>
+                <div class="catch-expand-hint">tap to expand</div>
       </div>
     </div>`;
   }).join('');
@@ -2546,79 +2540,6 @@ function saveBulkTrips(){
 }
 
 
-async function identifyDetailCatch(catchIdx, tripIdx){
-  const e=trips[tripIdx];
-  if(!e||!e.catches_list||!e.catches_list[catchIdx]) return;
-  const c=e.catches_list[catchIdx];
-  if(!c.photo){showToast('No photo');return;}
-
-  const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
-  if(!geminiKey){showToast('Add Gemini key in Profile first');return;}
-
-  // Find the button and show spinner
-  const cards=document.querySelectorAll('.catch-detail-card');
-  const card=cards[catchIdx];
-  const btn=card?card.querySelector('button[onclick*="identifyDetailCatch"]'):null;
-  if(btn){btn.disabled=true;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Identifying...';}
-
-  try{
-    // Resize image
-    const resized=await new Promise(function(resolve){
-      const img=new Image();
-      img.onload=function(){
-        const M=1024;let w=img.width,h=img.height;
-        if(w>M||h>M){if(w>h){h=Math.round(h*M/w);w=M;}else{w=Math.round(w*M/h);h=M;}}
-        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
-        cv.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(cv.toDataURL('image/jpeg',0.82));
-      };
-      img.onerror=function(){resolve(c.photo);};
-      img.src=c.photo;
-    });
-
-    const base64=resized.split(',')[1];
-    const netSz=getNetSize();
-    const prompt=netSz
-      ?'You are measuring a fish in a landing net. Each mesh hole is exactly '+netSz+' inches wide. Count holes from mouth to tail and multiply. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
-      :'Identify this fish and estimate length in inches mouth to tail. Do not underestimate. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
-
-    const resp=await Promise.race([
-      fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:base64}},{text:prompt}]}],
-          generationConfig:{maxOutputTokens:1024,temperature:0}
-        })
-      }),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),30000))
-    ]);
-
-    if(!resp.ok) throw new Error('API '+resp.status);
-    const data=await resp.json();
-    let text='';
-    const parts=data.candidates?.[0]?.content?.parts||[];
-    for(let i=parts.length-1;i>=0;i--){if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}}
-    let clean=text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    if(clean.toLowerCase().startsWith('json')) clean=clean.slice(4).trim();
-    const js=clean.indexOf('{');const je=clean.lastIndexOf('}');
-    if(js<0||je<=js) throw new Error('No JSON: '+clean.substring(0,40));
-    const result=JSON.parse(clean.substring(js,je+1));
-    if(!result.species) throw new Error('No species');
-
-    // Save result
-    trips[tripIdx].catches_list[catchIdx].species=result.species;
-    trips[tripIdx].catches_list[catchIdx].length=result.length||'—';
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e2){}
-
-    showToast(result.species+' · '+(result.length||'?')+'"');
-    setTimeout(function(){openEntry(tripIdx);},300);
-
-  }catch(err){
-    if(btn){btn.disabled=false;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Identify Fish';}
-    showToast('Failed: '+err.message.substring(0,50));
-  }
-}
 
 
 
