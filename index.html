@@ -2546,45 +2546,80 @@ function saveBulkTrips(){
 }
 
 
-function identifyDetailCatch(catchIdx, tripIdx){
+async function identifyDetailCatch(catchIdx, tripIdx){
   const e=trips[tripIdx];
-  if(!e||!e.catches_list[catchIdx]) return;
+  if(!e||!e.catches_list||!e.catches_list[catchIdx]) return;
   const c=e.catches_list[catchIdx];
-  if(!c.photo){ showToast('No photo to identify'); return; }
+  if(!c.photo){showToast('No photo');return;}
 
-  // Temporarily put this catch photo into newCatches so identifyWithClaude can update it
-  // Save current newCatches state and restore after
-  const savedCatches = newCatches;
-  newCatches = e.catches_list.map(function(catch_item){
-    return {
-      species: catch_item.species||'',
-      fly: catch_item.fly||'',
-      flyCategory: catch_item.flyCategory||'Dry Flies',
-      flySize: catch_item.size||'16',
-      length: catch_item.length||'',
-      time: catch_item.time||'',
-      notes: catch_item.notes||'',
-      photo: catch_item.photo||null,
-      date: catch_item.date||e.date||''
-    };
-  });
+  const geminiKey=(localStorage.getItem('driftjournal_gemini_key')||'').trim();
+  if(!geminiKey){showToast('Add Gemini key in Profile first');return;}
 
-  // After identification completes, save back to the trip and refresh entry view
-  const origIdentify = identifyWithClaude;
-  identifyWithClaude(c.photo, catchIdx).then(function(){
-    // Copy identified data back to trip
-    if(newCatches[catchIdx]){
-      trips[tripIdx].catches_list[catchIdx].species = newCatches[catchIdx].species || c.species;
-      trips[tripIdx].catches_list[catchIdx].length = newCatches[catchIdx].length || c.length;
-    }
-    newCatches = savedCatches;
+  // Find the button and show spinner
+  const cards=document.querySelectorAll('.catch-detail-card');
+  const card=cards[catchIdx];
+  const btn=card?card.querySelector('button[onclick*="identifyDetailCatch"]'):null;
+  if(btn){btn.disabled=true;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Identifying...';}
+
+  try{
+    // Resize image
+    const resized=await new Promise(function(resolve){
+      const img=new Image();
+      img.onload=function(){
+        const M=1024;let w=img.width,h=img.height;
+        if(w>M||h>M){if(w>h){h=Math.round(h*M/w);w=M;}else{w=Math.round(w*M/h);h=M;}}
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg',0.82));
+      };
+      img.onerror=function(){resolve(c.photo);};
+      img.src=c.photo;
+    });
+
+    const base64=resized.split(',')[1];
+    const netSz=getNetSize();
+    const prompt=netSz
+      ?'You are measuring a fish in a landing net. Each mesh hole is exactly '+netSz+' inches wide. Count holes from mouth to tail and multiply. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.'
+      :'Identify this fish and estimate length in inches mouth to tail. Do not underestimate. Output ONLY JSON: {"species":"Rainbow Trout","length":"14.5","confidence":82}. Species: Rainbow Trout, Brown Trout, Cutthroat Trout, Brook Trout, Bull Trout, Steelhead, Mountain Whitefish, Arctic Grayling.';
+
+    const resp=await Promise.race([
+      fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:base64}},{text:prompt}]}],
+          generationConfig:{maxOutputTokens:1024,temperature:0}
+        })
+      }),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),30000))
+    ]);
+
+    if(!resp.ok) throw new Error('API '+resp.status);
+    const data=await resp.json();
+    let text='';
+    const parts=data.candidates?.[0]?.content?.parts||[];
+    for(let i=parts.length-1;i>=0;i--){if(parts[i].text&&!parts[i].thought){text=parts[i].text;break;}}
+    let clean=text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    if(clean.toLowerCase().startsWith('json')) clean=clean.slice(4).trim();
+    const js=clean.indexOf('{');const je=clean.lastIndexOf('}');
+    if(js<0||je<=js) throw new Error('No JSON: '+clean.substring(0,40));
+    const result=JSON.parse(clean.substring(js,je+1));
+    if(!result.species) throw new Error('No species');
+
+    // Save result
+    trips[tripIdx].catches_list[catchIdx].species=result.species;
+    trips[tripIdx].catches_list[catchIdx].length=result.length||'—';
     try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e2){}
-    // Refresh the entry view after a short delay to show result
-    setTimeout(function(){ openEntry(tripIdx); }, 500);
-  }).catch(function(){
-    newCatches = savedCatches;
-  });
+
+    showToast(result.species+' · '+(result.length||'?')+'"');
+    setTimeout(function(){openEntry(tripIdx);},300);
+
+  }catch(err){
+    if(btn){btn.disabled=false;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Identify Fish';}
+    showToast('Failed: '+err.message.substring(0,50));
+  }
 }
+
 
 
 </script>
