@@ -921,8 +921,10 @@ document.addEventListener('click',function(e){
   const photoArea=e.target.closest('.catch-photo-area[data-ci]');
   if(photoArea){
     // If tapped on the Replace button let it bubble, otherwise open photo modal
-    if(e.target.closest('button')) return;
     const ci=+photoArea.dataset.ci;
+    // Replace button triggers file picker, Re-ID button handles itself
+    if(e.target.closest('.replace-photo-btn')){ triggerCatchPhoto(ci); return; }
+    if(e.target.closest('button')) return; // Re-ID and other buttons handle themselves
     const photo=newCatches[ci]&&newCatches[ci].photo;
     if(photo){ openPhotoModal(photo); } else { triggerCatchPhoto(ci); }
     return;
@@ -1328,7 +1330,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 function buildCatchCard(c,i){
   // FIX 2: Photo area shown first, species/length blank until photo added
   const ph=c.photo
-    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint" style="display:none"></div><button onclick="event.stopPropagation();triggerCatchPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">Replace</button><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
+    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint" style="display:none"></div><button onclick="event.stopPropagation();triggerCatchPhoto(${i})" class="replace-photo-btn" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">Replace</button><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
     :`<div class="catch-photo-area" data-ci="${i}">
         <div class="catch-photo-hint">
           <div class="ph-icon"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
@@ -1713,13 +1715,20 @@ function selectInlineLocation(name, lat, lng, state){
   showToast('Location updated');
   if(lat){
     setTimeout(fetchWeather, 300);
-    // Clear old USGS data and fetch for new location
     ['usgsFlow','usgsTemp','usgsGage'].forEach(function(id){
       const el=document.getElementById(id); if(el) el.textContent='…';
     });
     document.getElementById('usgsStatus').textContent='Searching for nearby gauge...';
     document.getElementById('usgsSiteId').value='';
-    setTimeout(fetchUSGS, 500);
+    setTimeout(async function(){
+      const gaugeId = await findNearestGauge(lat, lng);
+      if(gaugeId){
+        document.getElementById('usgsSiteId').value = gaugeId;
+        fetchUSGS();
+      } else {
+        document.getElementById('usgsStatus').textContent='No gauge found nearby';
+      }
+    }, 500);
   }
 }
 function startNewEntry(){
@@ -2267,9 +2276,9 @@ function saveEditableEntry(idx){
   // Persist to localStorage
   try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e){}
 
-  currentEntryIdx=null;
   showToast('Entry updated!');
   openEntry(idx);
+  currentEntryIdx=null;
 }
 
 function removeTripPhotoEdit(idx,pi){
@@ -2334,18 +2343,17 @@ function closeModal(){document.getElementById('editModal').style.display='none'}
       const parsed=JSON.parse(saved);
       if(Array.isArray(parsed)&&parsed.length>0){
         trips=parsed;
-        console.log('Loaded',trips.length,'trips from storage');
       }
     }
-  }catch(e){console.log('Storage load error:',e);}
+  }catch(e){}
+  // Always render from current trips (localStorage overrides sample data)
+  renderFeed();
+  try{renderMap();}catch(e){}
+  document.getElementById('statTrips').textContent=trips.length;
+  document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+(t.catches_list?t.catches_list.length:0);},0);
 })();
-// Init on DOM ready
 // Clean up any stale progress bar from previous session
 (function(){const b=document.getElementById('identifyProgressBar');if(b)b.remove();})();
-renderFeed();
-try{renderMap();}catch(e){console.log('map init err:',e.message);}
-document.getElementById('statTrips').textContent=trips.length;
-document.getElementById('statCatches').textContent=trips.reduce(function(s,t){return s+t.catches_list.length;},0);
 
 function getNetSize(){return parseFloat(localStorage.getItem('driftjournal_net_size')||'0')||null;}
 function saveNetSize(size){
