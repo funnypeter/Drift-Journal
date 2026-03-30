@@ -459,19 +459,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
 </style>
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'>
 
-function openPhotoModal(src){
-  let m=document.getElementById('photoViewModal');
-  if(!m){
-    m=document.createElement('div');
-    m.id='photoViewModal';
-    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
-    m.innerHTML='<img id="photoViewImg" style="max-width:100vw;max-height:100vh;object-fit:contain"/><button onclick="document.getElementById(\'photoViewModal\').style.display=\'none\'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer">×</button>';
-    m.onclick=function(e){if(e.target===m)m.style.display='none';};
-    document.body.appendChild(m);
-  }
-  document.getElementById('photoViewImg').src=src;
-  m.style.display='flex';
-}
 </script>
 <script src='https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js'></script>
 </head>
@@ -819,7 +806,20 @@ function openPhotoModal(src){
 <div class="toast" id="toast"></div>
 </div>
 
-<script>
+<script>function openPhotoModal(src){
+  let m=document.getElementById('photoViewModal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='photoViewModal';
+    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center';
+    m.innerHTML='<img id="photoViewImg" style="max-width:100vw;max-height:100vh;object-fit:contain"/><button onclick="document.getElementById(\'photoViewModal\').style.display=\'none\'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:22px;cursor:pointer">×</button>';
+    m.onclick=function(e){if(e.target===m)m.style.display='none';};
+    document.body.appendChild(m);
+  }
+  document.getElementById('photoViewImg').src=src;
+  m.style.display='flex';
+}
+
 // On load: ?gemini=KEY in URL saves the Gemini key without needing UI
 (function(){
   try{
@@ -1305,10 +1305,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 
     // Update length input
     const lengthInput=card.querySelector('.catch-field input[placeholder="18.5"]')||card.querySelector('.catch-field input[placeholder="—"]');
-    if(lengthInput){
-      lengthInput.value=result.length||'';
-      lengthInput.dispatchEvent(new Event('input'));
-    }
+    if(lengthInput){lengthInput.value=result.length||'';lengthInput.dispatchEvent(new Event('input'));}
 
     const meshNote=result.mesh_holes_counted>0?' ('+result.mesh_holes_counted+' mesh holes × '+getNetSize()+'")'  :'';
     aiStrip.innerHTML='<div class="ai-result-strip">'+
@@ -1723,8 +1720,8 @@ function selectInlineLocation(name, lat, lng, state){
     });
     document.getElementById('usgsStatus').textContent='Searching for nearby gauge...';
     document.getElementById('usgsSiteId').value='';
-    document.getElementById('usgsSiteId').value = '';
-    document.getElementById('usgsStatus').textContent = 'Location changed — tap Fetch to reload';
+    document.getElementById('usgsSiteId').value='';
+    document.getElementById('usgsStatus').textContent='Location changed — tap Fetch to reload';
   }
 }
 function startNewEntry(){
