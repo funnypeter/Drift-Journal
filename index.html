@@ -818,13 +818,11 @@ function openDB(){
   });
 }
 async function saveTripsIDB(){
+  // Save full data to localStorage first
   try{
-    const db=await openDB();
-    const tx=db.transaction(STORE,'readwrite');
-    const store=tx.objectStore(STORE);
-    store.clear();
-    trips.forEach(function(t){ store.put(t); });
-    // Also save to localStorage as backup (without photos to save space)
+    localStorage.setItem('driftjournal_trips',JSON.stringify(trips));
+  }catch(e){
+    // localStorage full - try without photos
     const slim=trips.map(function(t){
       const s=Object.assign({},t);
       s.photos=[];
@@ -833,13 +831,29 @@ async function saveTripsIDB(){
       });
       return s;
     });
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(slim));}catch(e){}
-  }catch(e){
-    // IDB failed, try localStorage with full data
-    try{localStorage.setItem('driftjournal_trips',JSON.stringify(trips));}catch(e2){}
+    try{localStorage.setItem('driftjournal_trips',JSON.stringify(slim));}catch(e2){
+      showToast('Storage full — could not save');
+    }
   }
+  // Also save to IDB for redundancy
+  try{
+    const db=await openDB();
+    const tx=db.transaction(STORE,'readwrite');
+    const store=tx.objectStore(STORE);
+    store.clear();
+    trips.forEach(function(t){ store.put(t); });
+  }catch(e){}
 }
 async function loadTripsIDB(){
+  // Try localStorage first (has photos)
+  try{
+    const saved=localStorage.getItem('driftjournal_trips');
+    if(saved){
+      const parsed=JSON.parse(saved);
+      if(Array.isArray(parsed)&&parsed.length>0) return parsed;
+    }
+  }catch(e){}
+  // Fall back to IDB
   try{
     const db=await openDB();
     const tx=db.transaction(STORE,'readonly');
@@ -2867,7 +2881,7 @@ async function handleBulkPhotos(files){
   if(saveLabel) saveLabel.textContent='Save '+groupList.length+' Trip'+(groupList.length!==1?'s':'');
 }
 
-function saveBulkTrips(){
+async function saveBulkTrips(){
   if(!_bulkTrips||!_bulkTrips.length){showToast('No trips to save');return;}
   _bulkTrips.forEach(function(g){
     // Convert each photo into a catch entry so it shows in the Catch Gallery
@@ -2892,7 +2906,7 @@ function saveBulkTrips(){
     };
     trips.push(newTrip);
   });
-  saveTripsIDB();
+  await saveTripsIDB();
   renderFeed();
   closeBulkImport();
   document.getElementById('statTrips').textContent=trips.length;
