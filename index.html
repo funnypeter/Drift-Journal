@@ -819,7 +819,25 @@ function openPhotoModal(src){
 <div class="toast" id="toast"></div>
 </div>
 
-<script>function compressPhoto(dataUrl,cb){
+<script>
+function setHeroPhoto(catchIdx){
+  const photo = newCatches[catchIdx]&&newCatches[catchIdx].photo;
+  if(!photo) return;
+  // Store as heroPhoto on the current trip being edited
+  if(currentEntryIdx!==null && trips[currentEntryIdx]){
+    trips[currentEntryIdx].heroPhoto = photo;
+    trips[currentEntryIdx].photos = [photo];
+  }
+  // Update UI - show which is active
+  document.querySelectorAll('.hero-btn').forEach(function(b){
+    b.style.background = 'rgba(0,0,0,.55)';
+    b.textContent = '★ Hero';
+  });
+  const btn = document.querySelector('.hero-btn[data-ci="'+catchIdx+'"]');
+  if(btn){ btn.style.background = 'var(--teal)'; btn.textContent = '★ Hero'; }
+  showToast('Hero image set!');
+}
+function compressPhoto(dataUrl,cb){
   if(!dataUrl||!dataUrl.startsWith('data:image')){cb(dataUrl);return;}
   const img=new Image();
   img.onload=function(){
@@ -1354,7 +1372,7 @@ async function identifyWithClaude(imageDataUrl, catchIdx){
 function buildCatchCard(c,i){
   // FIX 2: Photo area shown first, species/length blank until photo added
   const ph=c.photo
-    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint" style="display:none"></div><button onclick="event.stopPropagation();triggerCatchPhoto(${i})" class="replace-photo-btn" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">Replace</button><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
+    ?`<div class="catch-photo-area" data-ci="${i}"><img src="${c.photo}"/><div class="catch-photo-overlay"></div><div class="catch-photo-has-hint" style="display:none"></div><button onclick="event.stopPropagation();triggerCatchPhoto(${i})" class="replace-photo-btn" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">Replace</button><button onclick="event.stopPropagation();setHeroPhoto(${i})" data-ci="${i}" class="hero-btn" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)">★ Hero</button><button onclick="event.stopPropagation();identifyWithClaude(newCatches[${i}].photo,${i})" style="position:absolute;bottom:8px;right:8px;background:rgba(30,77,67,.85);color:white;border:none;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Re-ID</button></div>`
     :`<div class="catch-photo-area" data-ci="${i}">
         <div class="catch-photo-hint">
           <div class="ph-icon"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
@@ -1435,7 +1453,18 @@ function addCustomFly(i){
   showToast('"'+val+'" added');
 }
 
-function renderCatches(){document.getElementById('catchesList').innerHTML=newCatches.map((c,i)=>buildCatchCard(c,i)).join('')}
+function renderCatches(){document.getElementById('catchesList').innerHTML=newCatches.map((c,i)=>buildCatchCard(c,i)).join('');
+  // Highlight current hero button
+  const _e=trips[currentEntryIdx];
+  if(_e&&_e.heroPhoto){
+    setTimeout(function(){
+      document.querySelectorAll('.hero-btn').forEach(function(b){
+        const ci=+b.dataset.ci;
+        if(newCatches[ci]&&newCatches[ci].photo===_e.heroPhoto) b.style.background='var(--teal)';
+      });
+    },50);
+  }
+}
 function confirmDeleteCatch(i){document.getElementById('confirmDeleteBtn').onclick=()=>deleteCatch(i);document.getElementById('confirmModal').style.display='flex'}
 function deleteCatch(i){newCatches.splice(i,1);const inp=document.getElementById('fileInput_'+i);if(inp)inp.remove();closeConfirm();renderCatches();showToast('Catch removed')}
 function closeConfirm(){document.getElementById('confirmModal').style.display='none'}
@@ -1838,7 +1867,7 @@ function renderFeed(){
   if(!sorted.length){fc.innerHTML=`<div class="empty-feed"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><h3>No journeys yet</h3><p>Tap + to log your first trip.</p><button onclick="startNewEntry()">Log First Trip</button></div>`;return}
   fc.innerHTML=sorted.map((t,i)=>{
     const idx=trips.indexOf(t);
-    const heroSrc=t.photos?.[0]||null;
+    const heroSrc=t.heroPhoto||t.photos?.[0]||(t.catches_list||[]).find(c=>c.photo)?.photo||null;
     const ph=heroSrc?`<div class="trip-ph" style="background:${t.bgColor}"><img src="${heroSrc}"/></div>`:`<div class="trip-ph" style="background:${t.bgColor}"><svg width="70" height="45" viewBox="0 0 70 45" fill="none" opacity=".28"><path d="M5 30 Q18 18 30 24 Q42 30 55 20 Q62 14 68 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="35" cy="24" rx="10" ry="6" fill="white" opacity=".35"/></svg></div>`;
     const tags=[t.flow?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>${t.flow}</span>`:'',t.water?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="4"/></svg>${t.water}</span>`:'',t.weather?`<span class="tag"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>${t.weather}</span>`:'']. filter(Boolean).join('');
     return `<div class="trip-card" onclick="openEntry(${idx})">${ph}<div class="trip-title-big">${t.title}</div><div class="trip-date-loc">${t.displayDate}${t.location?" · "+t.location.split(",")[0]:""}</div><div class="tag-row">${tags}</div>${t.notes?`<div class="trip-quote">"${t.notes.substring(0,130)}${t.notes.length>130?'...':''}"</div>`:''}</div>${i<sorted.length-1?'<div class="divider"></div>':''}`;
@@ -2288,6 +2317,8 @@ function saveEditableEntry(idx){
   e.weather=document.getElementById('logWeather').value;
   e.wind=document.getElementById('logWind').value;
   e.notes=document.getElementById('logJournal').value;
+  // Preserve heroPhoto if set, otherwise use first catch photo
+  if(!e.heroPhoto) e.heroPhoto = newCatches.find(function(c){return c.photo;})?.photo||null;
   e.catches_list=newCatches.map(function(c){
     return{species:c.species||'Unknown',fly:c.fly||'—',flyCategory:c.flyCategory,size:c.flySize,length:c.length||'—',time:c.time||'—',notes:c.notes||'',photo:c.photo||null};
   });
