@@ -2805,87 +2805,69 @@ function renderShareCardPreview(){
   function drawCard(){
     const PAD = W * 0.06;
     const c = _shareCatch;
-    const species = (c && c.species && c.species !== 'Unknown') ? c.species : '';
     const location = (t.location || t.title || '').split(',')[0];
 
-    // ── TOP STRIP: subtle dark band ──────────────────────────────────────────
-    const topH = H * 0.14;
+    // ── NO GRADIENT — photo is shown clean ──────────────────────────────────
+    // Only a very subtle vignette at top/bottom for text legibility
+    const topH = H * 0.22;
     const topGrad = ctx.createLinearGradient(0, 0, 0, topH);
-    topGrad.addColorStop(0, 'rgba(0,0,0,0.72)');
+    topGrad.addColorStop(0, 'rgba(0,0,0,0.52)');
     topGrad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = topGrad;
     ctx.fillRect(0, 0, W, topH);
 
-    // ── BOTTOM STRIP ─────────────────────────────────────────────────────────
-    const bottomH = H * (activeTags.length > 0 ? 0.42 : 0.3);
-    const botGrad = ctx.createLinearGradient(0, H - bottomH, 0, H);
-    botGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    botGrad.addColorStop(0.35, 'rgba(0,0,0,0.55)');
-    botGrad.addColorStop(1, 'rgba(0,0,0,0.88)');
-    ctx.fillStyle = botGrad;
-    ctx.fillRect(0, H - bottomH, W, bottomH);
+    // Only shade bottom if there are tags
+    const activeTags = _shareTags.filter(function(tag){ return tag.on && tag.key !== 'location' && tag.key !== 'date'; });
+    if(activeTags.length > 0){
+      const botH = H * 0.30;
+      const botGrad = ctx.createLinearGradient(0, H - botH, 0, H);
+      botGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      botGrad.addColorStop(1, 'rgba(0,0,0,0.72)');
+      ctx.fillStyle = botGrad;
+      ctx.fillRect(0, H - botH, W, botH);
+    }
 
-    // ── LOCATION — top left ──────────────────────────────────────────────────
-    const locSize = Math.round(W * 0.033);
-    ctx.font = '600 ' + locSize + 'px "Inter", system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8;
-    ctx.fillText(location, PAD, PAD + locSize * 1.1);
-
-    // ── WATERMARK — top right ────────────────────────────────────────────────
-    const wmSize = Math.round(W * 0.028);
-    ctx.font = '700 ' + wmSize + 'px "Playfair Display", Georgia, serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.textAlign = 'right';
-    ctx.shadowBlur = 6;
-    ctx.fillText('Drift Journal', W - PAD, PAD + wmSize * 1.1);
-    ctx.textAlign = 'left';
-    ctx.shadowBlur = 0;
-
-    // ── SPECIES NAME — large, bottom ─────────────────────────────────────────
-    if(species){
-      const spSize = Math.round(W * 0.088);
-      ctx.font = 'italic 700 ' + spSize + 'px "Playfair Display", Georgia, serif';
+    // ── TOP LEFT: Location in script font (Playfair italic) ─────────────────
+    const locationTag = _shareTags.find(function(tag){ return tag.key === 'location'; });
+    if(!locationTag || locationTag.on){
+      const locSize = Math.round(W * 0.048);
+      ctx.font = 'italic 600 ' + locSize + 'px "Playfair Display", Georgia, serif';
       ctx.fillStyle = 'white';
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18;
-      // Word wrap
-      const spWords = species.split(' ');
-      const spLines = []; let spLine = '';
-      spWords.forEach(function(w){
-        const test = spLine ? spLine + ' ' + w : w;
-        if(ctx.measureText(test).width > W * 0.88 && spLine){ spLines.push(spLine); spLine = w; }
-        else spLine = test;
-      });
-      if(spLine) spLines.push(spLine);
-      const spLineH = spSize * 1.15;
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 10;
+      ctx.fillText(location, PAD, PAD * 1.4 + locSize);
 
-      // Size tag (length) — smaller, above species
-      let speciesBaseY = H - PAD * 1.4;
-      if(activeTags.length > 0) speciesBaseY = H * 0.72;
-      const spStartY = speciesBaseY - (spLines.length - 1) * spLineH;
-      spLines.forEach(function(l, i){ ctx.fillText(l, PAD, spStartY + i * spLineH); });
-
-      // Length inline
-      if(c && c.length && c.length !== '—'){
-        ctx.shadowBlur = 0;
-        const lenSize = Math.round(W * 0.044);
-        ctx.font = '600 ' + lenSize + 'px "Inter", system-ui, sans-serif';
+      // Date — below location if date pill is on
+      const dateTag = _shareTags.find(function(tag){ return tag.key === 'date'; });
+      if(dateTag && dateTag.on){
+        const dtSize = Math.round(W * 0.028);
+        ctx.font = '500 ' + dtSize + 'px "Inter", system-ui, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.fillText(c.length + '"', PAD, spStartY - lenSize * 1.0);
+        ctx.shadowBlur = 6;
+        ctx.fillText(dateTag.label, PAD, PAD * 1.4 + locSize + dtSize * 1.6);
       }
     }
 
-    // ── TAG PILLS — bottom strip ──────────────────────────────────────────────
+    // ── TOP RIGHT: Drift Journal watermark ───────────────────────────────────
+    const wmSize = Math.round(W * 0.03);
+    ctx.font = 'italic 700 ' + wmSize + 'px "Playfair Display", Georgia, serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.textAlign = 'right';
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 8;
+    ctx.fillText('Drift Journal', W - PAD, PAD * 1.4 + wmSize);
+    ctx.textAlign = 'left';
+    ctx.shadowBlur = 0;
+
+    // ── BOTTOM: Tag pills (excluding location and date — those are top) ──────
     if(activeTags.length > 0){
       const tagFontSize = Math.round(W * 0.026);
       const tagPadX = Math.round(W * 0.022);
-      const tagPadY = Math.round(W * 0.013);
-      const tagGap = Math.round(W * 0.012);
-      const tagLineH = tagFontSize + tagPadY * 2 + Math.round(W * 0.008);
+      const tagPadY = Math.round(W * 0.012);
+      const tagGap = Math.round(W * 0.011);
+      const tagH = tagFontSize + tagPadY * 2;
+      const tagLineH = tagH + tagGap;
       ctx.font = '600 ' + tagFontSize + 'px "Inter", system-ui, sans-serif';
-      ctx.shadowBlur = 0;
 
-      // Wrap tags into rows
+      // Wrap into rows
       const rows = [[]]; let rowW = 0;
       const maxRowW = W - PAD * 2;
       activeTags.forEach(function(tag){
@@ -2897,24 +2879,24 @@ function renderShareCardPreview(){
         rowW += tw + tagGap;
       });
 
-      const totalTagH = rows.length * tagLineH + (rows.length - 1) * tagGap;
-      let rowY = H - PAD * 1.1 - totalTagH;
+      const totalTagH = rows.length * tagLineH;
+      let rowY = H - PAD * 1.0 - totalTagH;
 
       rows.forEach(function(row){
         let tx = PAD;
         row.forEach(function(tag){
-          const th = tagFontSize + tagPadY * 2;
           // Frosted pill
           ctx.fillStyle = 'rgba(255,255,255,0.15)';
-          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.45)';
           ctx.lineWidth = 1.2;
-          roundRect(ctx, tx, rowY, tag.w, th, th / 2);
+          roundRect(ctx, tx, rowY, tag.w, tagH, tagH / 2);
           ctx.fill(); ctx.stroke();
           ctx.fillStyle = 'white';
-          ctx.fillText(tag.label, tx + tagPadX, rowY + tagFontSize + tagPadY * 0.6);
+          ctx.shadowBlur = 0;
+          ctx.fillText(tag.label, tx + tagPadX, rowY + tagFontSize + tagPadY * 0.65);
           tx += tag.w + tagGap;
         });
-        rowY += tagLineH + tagGap;
+        rowY += tagLineH;
       });
     }
   }
