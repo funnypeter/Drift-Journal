@@ -35,9 +35,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);max-width:430
   :root{--bottom:68px}
   body{max-width:600px}
   .bnav{width:600px}
-  .feed-title{font-size:3rem}
+  .feed-title{font-size:3rem;font-family:var(--sans);font-weight:800;font-style:normal}
   .trip-ph{aspect-ratio:16/9}
-  .trip-title-big{font-size:1.9rem}
+  .trip-title-big{font-size:1.9rem;font-family:var(--serif);font-style:italic}
   .conditions-card{padding:16px}
   .cond-grid-3{grid-template-columns:repeat(3,1fr)}
   .catch-scroll{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;overflow-x:visible;padding:0 16px 16px}
@@ -778,7 +778,7 @@ function openPhotoModal(src){
 </div>
 
 <!-- ENTRY DETAIL -->
-<div class="view" id="vEntry"><div id="entryDetailContent"></div></div>
+<div class="view" id="vEntry" style="padding-bottom:140px"><div id="entryDetailContent"></div></div>
 
 <!-- BOTTOM NAV -->
 <!-- PWA Install Banner -->
